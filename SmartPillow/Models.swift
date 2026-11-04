@@ -138,6 +138,42 @@ struct SleepSession: Codable, Identifiable {
     }
 }
 
+extension SleepSession {
+    /// 7 晚示例数据，仅用于截图和演示。
+    static func sampleNights() -> [SleepSession] {
+        let cal = Calendar.current
+        let hours: [Double] = [7.2, 6.7, 7.5, 6.9, 5.8, 7.1, 6.4]
+        let quiet: [Double] = [0.84, 0.79, 0.86, 0.80, 0.71, 0.83, 0.78]
+        return hours.indices.map { i -> SleepSession in
+            let day = cal.date(byAdding: .day, value: -(i + 1), to: cal.startOfDay(for: Date()))!
+            let start = cal.date(bySettingHour: 23, minute: 10 + i * 3, second: 0, of: day)!
+            let dur = hours[i] * 3600 + 20 * 60
+            var s = SleepSession(start: start)
+            s.end = start.addingTimeInterval(dur)
+            s.inBedSeconds = hours[i] * 3600
+            s.quietSeconds = s.inBedSeconds * quiet[i]
+            s.activeSeconds = s.inBedSeconds - s.quietSeconds
+            s.awayCount = i % 3
+            s.turns = 10 + (i * 3) % 7
+            s.interventions = i % 2
+            s.sleepOnsetSeconds = Double(14 + i * 4) * 60
+            s.respSum = 14.1 * 100
+            s.respCount = 100
+            s.poseSeconds = ["SUPINE": s.inBedSeconds * 0.46, "LEFT": s.inBedSeconds * 0.32,
+                             "RIGHT": s.inBedSeconds * 0.18, "UNKNOWN": s.inBedSeconds * 0.04]
+            let plan: [(Double, Activity)] = [(0.08, .quiet), (0.02, .active), (0.16, .quiet), (0.015, .away), (0.18, .quiet),
+                                              (0.04, .active), (0.03, .active), (0.01, .quiet), (0.025, .active), (0.2, .quiet),
+                                              (0.015, .away), (0.225, .quiet)]
+            var t = 0.0
+            for (f, kind) in plan {
+                s.segments.append(Segment(start: t * dur, end: (t + f) * dur, kind: kind))
+                t += f
+            }
+            return s
+        }
+    }
+}
+
 /// 助眠强度预设，与设计稿里的“轻柔 / 标准 / 明显”一致。
 enum AssistPreset: String, Codable, CaseIterable, Identifiable {
     case gentle, standard, strong

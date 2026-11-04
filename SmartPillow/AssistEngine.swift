@@ -67,6 +67,8 @@ final class AssistEngine: ObservableObject {
         reverseLR = d.bool(forKey: "reverseLR")
         sound.kind = soundKind
         sessions = SessionStore.load()
+        // 截图用：启动参数 `-seedDemo YES` 时填入 7 晚示例报告（只在内存里，不保存）
+        if d.bool(forKey: "seedDemo") && sessions.isEmpty { sessions = SleepSession.sampleNights() }
         client.onStatus = { [weak self] s in self?.tick(s) }
     }
 

@@ -24,7 +24,8 @@ final class PillowClient: ObservableObject {
             if !demo { link = host.isEmpty ? .idle : .searching }
         }
     }
-    private var demoStart = Date()
+    /// 截图用：启动参数 `-demoOffset 秒数` 让演示直接从某个时刻开始（例如已经躺下安静）。
+    private var demoStart = Date().addingTimeInterval(-UserDefaults.standard.double(forKey: "demoOffset"))
 
     var phoneIP: String { Network.localIPv4() ?? "未连接 Wi-Fi" }
 

@@ -1,0 +1,85 @@
+name: Simulator Screenshots
+
+# 在云端 iPhone 模拟器里用演示数据逐页截图，打包发布到 Releases，方便不连手机也能检查界面。
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  shots:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Pick an iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)["devices"]
+          phones = [x for k, v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone")]
+          pro = [x for x in phones if "Pro" in x["name"] and "Max" not in x["name"]]
+          print((pro or phones)[-1]["udid"])')
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl list devices | grep "$UDID"
+
+      - name: Build for simulator
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project SmartPillow.xcodeproj \
+            -scheme SmartPillow \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
+          test -d build/Build/Products/Debug-iphonesimulator/SmartPillow.app
+
+      - name: Capture every screen
+        run: |
+          UDID="${{ steps.sim.outputs.udid }}"
+          APP=com.jarvishome.smartpillow
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance dark
+          xcrun simctl status_bar "$UDID" override --time "22:47" --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3
+          xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/SmartPillow.app
+          mkdir -p shots
+          for s in onboarding tonight recording report history assist device setup calibrate; do
+            ONB=YES; [ "$s" = onboarding ] && ONB=NO
+            xcrun simctl terminate "$UDID" "$APP" 2>/dev/null || true
+            xcrun simctl launch "$UDID" "$APP" \
+              -uiScreen "$s" -onboarded "$ONB" -demoMode YES -demoOffset 200 -seedDemo YES \
+              -AppleLanguages "(zh-Hans)" -AppleLocale zh_CN
+            sleep 7
+            xcrun simctl io "$UDID" screenshot "shots/$s.png"
+          done
+          ls -l shots
+
+      - name: Package screenshots
+        run: cd shots && zip -q ../screens.zip *.png
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: shots
+
+      - name: Publish screenshots
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: shots-${{ github.run_number }}
+          name: Simulator screenshots ${{ github.run_number }}
+          files: screens.zip
+          prerelease: true

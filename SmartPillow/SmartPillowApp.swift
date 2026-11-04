@@ -92,6 +92,22 @@ struct RootView: View {
             for name in ["ZCOOLXiaoWei-Regular", "Italiana-Regular"] where UIFont(name: name, size: 12) == nil {
                 print("⚠️ 字体未加载：\(name)")
             }
+            openScreenFromLaunchArgument()
+        }
+    }
+
+    /// 截图用：启动参数 `-uiScreen 页面名` 直接打开某一页（模拟器自动截图流程会用到）。
+    private func openScreenFromLaunchArgument() {
+        guard let screen = UserDefaults.standard.string(forKey: "uiScreen") else { return }
+        switch screen {
+        case "recording": assist.startSession(manual: true)
+        case "report": tab = .report
+        case "history": tab = .report; reportPath = [.history]
+        case "assist": tab = .tonight; tonightPath = [.assist]
+        case "device": tab = .device
+        case "setup": tab = .device; devicePath = [.setup]
+        case "calibrate": tab = .device; devicePath = [.calibrate]
+        default: tab = .tonight
         }
         .onChange(of: assist.session?.id) { id in
             // 开始记录（手动或自动）就进入“记录中”全屏页，结束后退出
