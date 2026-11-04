@@ -301,6 +301,39 @@ final class AssistEngine: ObservableObject {
     }
 }
 
+extension AssistEngine {
+    /// 最近 7 晚的平均开始时间，例如 "23:15"；不足 2 晚时返回 nil。
+    var usualBedtime: String? {
+        let recent = sessions.prefix(7)
+        guard recent.count >= 2 else { return nil }
+        let cal = Calendar.current
+        // 以中午 12 点为界，把凌晨的时间算到前一天之后，避免 23:50 和 00:10 平均成中午
+        let minutes = recent.map { s -> Int in
+            let c = cal.dateComponents([.hour, .minute], from: s.start)
+            let m = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+            return m < 12 * 60 ? m + 24 * 60 : m
+        }
+        let avg = (minutes.reduce(0, +) / minutes.count) % (24 * 60)
+        let rounded = (avg + 2) / 5 * 5 % (24 * 60)
+        return String(format: "%02d:%02d", rounded / 60, rounded % 60)
+    }
+
+    /// 连续有记录的晚数（以入睡那天算，允许今晚还没开始）。
+    var streak: Int {
+        let cal = Calendar.current
+        func nightOf(_ d: Date) -> Date { cal.startOfDay(for: d.addingTimeInterval(-12 * 3600)) }
+        let nights = Set(sessions.map { nightOf($0.start) })
+        var day = nightOf(Date())
+        if !nights.contains(day) { day = cal.date(byAdding: .day, value: -1, to: day) ?? day }
+        var count = 0
+        while nights.contains(day) {
+            count += 1
+            day = cal.date(byAdding: .day, value: -1, to: day) ?? day
+        }
+        return count
+    }
+}
+
 enum SessionStore {
     private static var url: URL {
         FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]

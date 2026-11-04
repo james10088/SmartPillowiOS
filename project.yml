@@ -22,6 +22,9 @@ targets:
         UILaunchScreen: {}
         UIBackgroundModes:
           - audio
+        UIAppFonts:
+          - ZCOOLXiaoWei-Regular.ttf
+          - Italiana-Regular.ttf
         NSLocalNetworkUsageDescription: 需要访问家里的局域网，才能连接和控制智能枕头。
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true

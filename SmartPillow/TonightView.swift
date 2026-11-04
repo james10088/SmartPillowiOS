@@ -1,48 +1,51 @@
 import SwiftUI
 
+/// 画板 1「今夜 · 未开始」
 struct TonightView: View {
     @EnvironmentObject private var client: PillowClient
     @EnvironmentObject private var assist: AssistEngine
-    @State private var confirmEnd = false
+    @Binding private var showRecording: Bool
+
+    init(showRecording: Binding<Bool>) {
+        self._showRecording = showRecording
+    }
 
     var body: some View {
-        ZStack {
-            NightBackground()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    header
-                    if let m = assist.message {
-                        Text(m)
-                            .font(.footnote)
-                            .foregroundStyle(.white.opacity(0.85))
-                            .padding(.horizontal, 14).padding(.vertical, 10)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .glass(18)
-                    }
-                    hero
-                    liveCard
-                    tiles
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 16) {
+                header.rise(0)
+                if let m = assist.message {
+                    Text(m)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .padding(.horizontal, 14).padding(.vertical, 10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .glass(18)
+                        .transition(.opacity)
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 12)
-                .padding(.bottom, 30)
+                assistStrip.rise(0.08)
+                hero.rise(0.16)
+                tiles.rise(0.26)
             }
+            .padding(.horizontal, 20)
+            .padding(.top, 14)
+            .padding(.bottom, 110)
+            .animation(.easeInOut, value: assist.message)
         }
-        .confirmationDialog("结束今晚的记录？", isPresented: $confirmEnd, titleVisibility: .visible) {
-            Button("结束并保存报告", role: .destructive) { assist.endSession() }
-            Button("继续记录", role: .cancel) {}
-        }
+        .background { NightBackground() }
     }
+
+    // MARK: 顶部
 
     private var header: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(greeting).font(.display(30)).lineSpacing(4)
+                Text(greeting).font(.xiaowei(32)).lineSpacing(6).tracking(1)
                 Text(Date.now.formatted(.dateTime.month().day().weekday(.wide).locale(Theme.zh)))
-                    .font(.footnote).foregroundStyle(Theme.secondary)
+                    .font(.system(size: 13)).foregroundStyle(Theme.secondary)
             }
             Spacer()
-            LinkChip()
+            LinkBadge()
         }
     }
 
@@ -53,84 +56,168 @@ struct TonightView: View {
         return "晚上好，\n今晚好好睡。"
     }
 
-    @ViewBuilder private var hero: some View {
-        HeroCard {
-            VStack(spacing: 8) {
-                if let s = assist.session {
-                    Text("已记录").font(.footnote).foregroundStyle(.white.opacity(0.9))
-                    TimelineView(.periodic(from: .now, by: 1)) { _ in
-                        Text(formatDuration(Date().timeIntervalSince(s.start)))
-                            .font(.numeral(84)).monospacedDigit()
-                    }
-                    Text(assist.phase.label).font(.subheadline).foregroundStyle(.white.opacity(0.92))
-                    Text("音量 \(assist.levelPercent)% · \(assist.soundKind.name)")
-                        .font(.caption).foregroundStyle(.white.opacity(0.8))
-                    Button("结束记录") { confirmEnd = true }
+    // MARK: 助眠音量条
+
+    private var assistStrip: some View {
+        NavigationLink(value: Route.assist) {
+            HStack(spacing: 12) {
+                Icon(kind: .fadeBars, size: 20, color: Theme.lilac)
+                    .frame(width: 40, height: 40)
+                    .background(Color(red: 167 / 255, green: 139 / 255, blue: 250 / 255).opacity(0.22), in: Circle())
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("助眠音量 · \(assist.preset.name)").font(.system(size: 14, weight: .medium))
+                    Text("\(assist.soundKind.name) · \(client.link == .connected ? "枕头在线" : "等待枕头连接")")
+                        .font(.system(size: 12)).foregroundStyle(Theme.secondary)
+                }
+                Spacer()
+                Text(assist.autoStart ? "已开启" : "已关闭")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(assist.autoStart ? Theme.mint : Theme.secondary)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background((assist.autoStart ? Theme.mint : Color.white).opacity(0.16), in: Capsule())
+            }
+            .padding(.vertical, 10).padding(.leading, 10).padding(.trailing, 12)
+            .glass(22)
+            .foregroundStyle(.white)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: 主卡片
+
+    private var hero: some View {
+        HeroCard(padding: 20) {
+            ZStack {
+                BreathingHalo()
+                VStack(spacing: 0) {
+                    if let s = assist.session {
+                        Text("已记录").font(.system(size: 13)).foregroundStyle(.white.opacity(0.88))
+                        TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                            GhostClock(main: formatDuration(ctx.date.timeIntervalSince(s.start)),
+                                       above: formatDuration(ctx.date.timeIntervalSince(s.start) - 60),
+                                       below: formatDuration(ctx.date.timeIntervalSince(s.start) + 60),
+                                       size: 80)
+                        }
+                        Text(assist.phase.label).font(.system(size: 13)).foregroundStyle(.white.opacity(0.92)).padding(.top, 12)
+                        Button { showRecording = true } label: {
+                            Label { Text("回到记录页") } icon: { Icon(kind: .moonPlain, size: 18, color: Theme.ink) }
+                        }
                         .buttonStyle(PillButtonStyle())
-                        .padding(.top, 10)
-                } else {
-                    Text("现在").font(.footnote).foregroundStyle(.white.opacity(0.9))
-                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                        Text(ctx.date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).locale(Theme.zh)))
-                            .font(.numeral(84)).monospacedDigit()
+                        .padding(.top, 18)
+                    } else {
+                        Text("现在").font(.system(size: 13)).foregroundStyle(.white.opacity(0.88))
+                        TimelineView(.periodic(from: .now, by: 1)) { ctx in
+                            GhostClock(main: hm(ctx.date), above: hm(ctx.date.addingTimeInterval(-60)),
+                                       below: hm(ctx.date.addingTimeInterval(60)), size: 84)
+                        }
+                        Text(subline).font(.system(size: 13)).foregroundStyle(.white.opacity(0.92)).padding(.top, 12)
+                        Button { assist.startSession(manual: true) } label: {
+                            Label { Text("开始今晚的记录") } icon: { Icon(kind: .moonPlain, size: 18, color: Theme.ink) }
+                        }
+                        .buttonStyle(PillButtonStyle())
+                        .padding(.top, 18)
                     }
-                    Text(assist.autoStart ? (assist.standby ? "待命中 · 锁屏后躺下也会自动开始" : "躺下后会自动开始助眠") : "自动开始已关闭")
-                        .font(.footnote).foregroundStyle(.white.opacity(0.9))
-                    Button {
-                        assist.startSession(manual: true)
-                    } label: {
-                        Label("开始今晚的记录", systemImage: "moon.fill")
-                    }
-                    .buttonStyle(PillButtonStyle())
-                    .padding(.top, 10)
                 }
             }
         }
     }
 
-    private var liveCard: some View {
-        let s = client.status
-        let act = s.map { Activity($0) } ?? .unknown
-        let pose = Pose(raw: s?.posture?.pose, reversed: assist.reverseLR)
-        let rate = s?.respiration?.rateBpm
-        return HStack(spacing: 14) {
-            Image(systemName: act == .quiet ? "zzz" : act == .away ? "bed.double" : "waveform.path")
-                .font(.title3)
-                .foregroundStyle(Theme.lavender)
-                .frame(width: 48, height: 48)
-                .background(Theme.lavender.opacity(0.18), in: Circle())
-            VStack(alignment: .leading, spacing: 3) {
-                Text(s == nil ? "等待枕头数据" : "\(act.label) · \(pose.label)").font(.headline)
-                Text(rate.map { "呼吸约 \(Int($0.rounded())) 次/分" } ?? "呼吸数据积累中")
-                    .font(.footnote).foregroundStyle(Theme.secondary)
-            }
-            Spacer()
-        }
-        .padding(16)
-        .glass()
+    private var subline: String {
+        if let t = assist.usualBedtime { return "平时 \(t) 左右入睡" }
+        if !assist.autoStart { return "自动开始已关闭" }
+        return assist.standby ? "待命中 · 锁屏后躺下也会自动开始" : "躺下后会自动开始助眠"
     }
 
-    @ViewBuilder private var tiles: some View {
-        if let s = assist.session ?? assist.sessions.first {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(assist.session == nil ? "上一晚" : "本次").font(.caption).foregroundStyle(Theme.secondary)
-                HStack(spacing: 10) {
-                    StatTile(value: formatDuration(s.inBedSeconds), label: "在枕")
-                    StatTile(value: "\(Int((s.quietRatio * 100).rounded()))%", label: "安静占比")
-                    StatTile(value: "\(s.turns)", label: "翻身", tint: Theme.mint)
-                }
+    private func hm(_ d: Date) -> String {
+        d.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).locale(Theme.zh))
+    }
+
+    // MARK: 三个数据块
+
+    private var tiles: some View {
+        let last = assist.sessions.first
+        return HStack(spacing: 10) {
+            NavigationLink(value: last.map { Route.report($0.id) } ?? Route.history) {
+                StatTile(value: last.map { formatHM($0.inBedSeconds) } ?? "—", label: "昨夜在枕")
+            }
+            NavigationLink(value: last.map { Route.report($0.id) } ?? Route.history) {
+                StatTile(value: last.map { "\(Int(($0.quietRatio * 100).rounded()))%" } ?? "—", label: "安静占比")
+            }
+            NavigationLink(value: Route.history) {
+                StatTile(value: "\(assist.streak)", label: "连续记录 晚", tint: Theme.mint)
             }
         }
+        .buttonStyle(.plain)
+        .foregroundStyle(.white)
     }
 }
 
-struct LinkChip: View {
+/// 大号 Italiana 数字，上下各一行淡化的“滚轮”数字，轻轻浮动。
+struct GhostClock: View {
+    private let main: String
+    private let above: String
+    private let below: String
+    private let size: CGFloat
+    @State private var float = false
+
+    init(main: String, above: String, below: String, size: CGFloat = 84) {
+        self.main = main
+        self.above = above
+        self.below = below
+        self.size = size
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(spaced(above)).font(.italiana(size * 0.4)).opacity(float ? 0.42 : 0.24).offset(y: float ? -3 : 0)
+            Text(main).font(.italiana(size)).tracking(2).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Text(spaced(below)).font(.italiana(size * 0.4)).opacity(float ? 0.24 : 0.42).offset(y: float ? 0 : -3)
+        }
+        .foregroundStyle(.white)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 2.15).repeatForever(autoreverses: true)) { float = true }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(main)
+    }
+
+    private func spaced(_ s: String) -> String { s.replacingOccurrences(of: ":", with: " : ") }
+}
+
+/// 主卡片里按呼吸节奏（约 14 次/分）起伏的光圈和缓慢旋转的虚线环。
+struct BreathingHalo: View {
+    @State private var on = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(RadialGradient(colors: [.white.opacity(0.2), .clear], center: .center, startRadius: 0, endRadius: 130))
+                .frame(width: 252, height: 252)
+                .scaleEffect(on ? 1.07 : 1)
+                .opacity(on ? 1 : 0.55)
+                .animation(.easeInOut(duration: 2.15).repeatForever(autoreverses: true), value: on)
+            Circle()
+                .strokeBorder(style: StrokeStyle(lineWidth: 1, dash: [3, 4]))
+                .foregroundStyle(.white.opacity(0.28))
+                .frame(width: 240, height: 240)
+                .rotationEffect(.degrees(on ? 360 : 0))
+                .animation(.linear(duration: 60).repeatForever(autoreverses: false), value: on)
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+        .onAppear { if !reduceMotion { on = true } }
+    }
+}
+
+/// 右上角的连接状态标签。
+struct LinkBadge: View {
     @EnvironmentObject private var client: PillowClient
 
     var body: some View {
         HStack(spacing: 6) {
             Circle().fill(color).frame(width: 7, height: 7)
-            Text(text).font(.caption)
+            Text(text).font(.system(size: 12))
         }
         .padding(.horizontal, 12).padding(.vertical, 8)
         .glass(16)
@@ -140,16 +227,22 @@ struct LinkChip: View {
         switch client.link {
         case .connected: return Theme.mint
         case .searching: return Theme.amber
-        default: return Color.red.opacity(0.8)
+        default: return Theme.coral
         }
     }
 
     private var text: String {
+        if client.demo { return "演示模式" }
         switch client.link {
         case .connected: return "枕头在线"
         case .searching: return "正在查找"
         case .idle: return "未连接"
-        case .unreachable: return "连接中断"
+        case .unreachable: return "未连上"
         }
     }
+}
+
+func formatHM(_ seconds: Double) -> String {
+    let m = Int(seconds) / 60
+    return "\(m / 60)h\(String(format: "%02d", m % 60))m"
 }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 热点配网：手机先在“设置 → Wi-Fi”里连上 SmartPillow- 开头的热点（密码 pillow123456），再回到这里发送。
+/// 画板 4「Wi-Fi 配网向导」：手机先在设置里连上 SmartPillow- 开头的热点（密码 pillow123456）。
 struct SetupView: View {
     @EnvironmentObject private var client: PillowClient
     @State private var ssid = UserDefaults.standard.string(forKey: "lastSSID") ?? ""
@@ -8,82 +8,112 @@ struct SetupView: View {
     @State private var showPassword = false
     @State private var phase: Phase = .idle
     @State private var note = ""
+    @State private var onHotspot = false
 
     enum Phase { case idle, sending, done, failed }
 
     var body: some View {
-        ZStack {
-            NightBackground()
-            ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    Text("告诉枕头家里的 Wi-Fi").font(.display(28))
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        step("1", "打开手机“设置 → Wi-Fi”，连接 SmartPillow- 开头的热点，密码 pillow123456。提示“无互联网连接”时选择继续使用。")
-                        step("2", "回到这里，填写家里 2.4G Wi-Fi 的名称和密码，点发送。")
-                        step("3", "看到“已连上”后，手机切回家里的 Wi-Fi。")
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 0) {
+                BackBar {
+                    HStack(spacing: 4) {
+                        Text(phase == .done ? "3" : "2").font(.italiana(17))
+                        Text("/").font(.system(size: 12))
+                        Text("3").font(.italiana(17))
                     }
-                    .padding(16)
-                    .glass(24)
-
-                    VStack(spacing: 0) {
-                        HStack {
-                            Text("网络").foregroundStyle(Theme.secondary).frame(width: 52, alignment: .leading)
-                            TextField("例如 2701主卧（不要选 5G）", text: $ssid)
-                                .textInputAutocapitalization(.never).autocorrectionDisabled()
-                        }
-                        .frame(minHeight: 54)
-                        Divider().overlay(.white.opacity(0.1))
-                        HStack {
-                            Text("密码").foregroundStyle(Theme.secondary).frame(width: 52, alignment: .leading)
-                            Group {
-                                if showPassword { TextField("没有密码就留空", text: $password) }
-                                else { SecureField("没有密码就留空", text: $password) }
-                            }
-                            .textInputAutocapitalization(.never).autocorrectionDisabled()
-                            Button { showPassword.toggle() } label: {
-                                Image(systemName: showPassword ? "eye.slash" : "eye").foregroundStyle(Theme.secondary)
-                            }
-                            .accessibilityLabel(showPassword ? "隐藏密码" : "显示密码")
-                        }
-                        .frame(minHeight: 54)
-                    }
-                    .padding(.horizontal, 16)
-                    .glass(24)
-
-                    switch phase {
-                    case .idle, .failed:
-                        Button("发送给枕头") { Task { await send() } }
-                            .buttonStyle(PillButtonStyle())
-                    case .sending:
-                        HStack(spacing: 10) {
-                            ProgressView().tint(.white)
-                            Text("枕头正在连接 \(ssid)…")
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 54)
-                        .glass(27)
-                    case .done:
-                        Label("已连上！把手机切回 \(ssid)", systemImage: "checkmark.circle.fill")
-                            .font(.headline)
-                            .foregroundStyle(Color(red: 0.05, green: 0.17, blue: 0.13))
-                            .frame(maxWidth: .infinity, minHeight: 54)
-                            .background(Theme.mint, in: Capsule())
-                    }
-
-                    if !note.isEmpty {
-                        Text(note).font(.footnote).foregroundStyle(phase == .failed ? Theme.amber : Theme.secondary)
-                    }
-                    Text("枕头只支持 2.4GHz 网络。").font(.caption).foregroundStyle(Theme.secondary)
+                    .foregroundStyle(.white.opacity(0.8))
+                    .padding(.horizontal, 12).frame(height: 32)
+                    .glass(16)
                 }
-                .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 30)
+                .rise(0)
+
+                VStack(spacing: 8) {
+                    RippleIcon().padding(.top, 26)
+                    Text("告诉枕头家里的 Wi-Fi").font(.xiaowei(30)).tracking(1).padding(.top, 18)
+                    HStack(spacing: 6) {
+                        if onHotspot {
+                            Icon(kind: .check, size: 14, color: Theme.mint)
+                            Text("已连上枕头热点").font(.system(size: 13)).foregroundStyle(.white.opacity(0.75))
+                        } else {
+                            Text("先在 设置 → Wi-Fi 连接 SmartPillow- 开头的热点，密码 pillow123456")
+                                .font(.system(size: 13)).foregroundStyle(Theme.amber)
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                }
+                .rise(0.08)
+
+                VStack(spacing: 0) {
+                    HStack(spacing: 12) {
+                        Text("网络").font(.system(size: 15)).foregroundStyle(.white.opacity(0.7)).frame(width: 56, alignment: .leading)
+                        TextField("例如 2701主卧（不要选 5G）", text: $ssid)
+                            .font(.system(size: 16))
+                            .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    }
+                    .frame(minHeight: 60).padding(.horizontal, 16)
+                    RowDivider()
+                    HStack(spacing: 12) {
+                        Text("密码").font(.system(size: 15)).foregroundStyle(.white.opacity(0.7)).frame(width: 56, alignment: .leading)
+                        Group {
+                            if showPassword { TextField("没有密码就留空", text: $password) }
+                            else { SecureField("没有密码就留空", text: $password) }
+                        }
+                        .font(.system(size: 16))
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        Button { showPassword.toggle() } label: {
+                            Icon(kind: .eye, size: 22, color: .white.opacity(0.75)).frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(showPassword ? "隐藏密码" : "显示密码")
+                    }
+                    .frame(minHeight: 60).padding(.leading, 16).padding(.trailing, 4)
+                }
+                .glass(26)
+                .padding(.top, 30)
+                .rise(0.18)
+
+                Text("枕头只认 2.4GHz 网络。名字里带“5G”的，请换另一个。")
+                    .font(.system(size: 12)).foregroundStyle(Theme.tertiary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 12).padding(.horizontal, 4)
+
+                Spacer(minLength: 40)
+                actionArea.rise(0.3)
+                if !note.isEmpty {
+                    Text(note).font(.system(size: 12))
+                        .foregroundStyle(phase == .failed ? Theme.amber : Theme.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 12)
+                }
+            }
+            .padding(.horizontal, 20).padding(.top, 14).padding(.bottom, 30)
+        }
+        .background { NightBackground() }
+        .task {
+            while !Task.isCancelled {
+                onHotspot = Network.localIPv4()?.hasPrefix("192.168.4.") == true
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
             }
         }
     }
 
-    private func step(_ n: String, _ text: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text(n).font(.numeral(20)).frame(width: 18)
-            Text(text).font(.footnote).foregroundStyle(.white.opacity(0.85))
+    @ViewBuilder private var actionArea: some View {
+        switch phase {
+        case .idle, .failed:
+            Button("发送给枕头") { Task { await send() } }
+                .buttonStyle(PillButtonStyle(height: 56))
+        case .sending:
+            SendingBar(ssid: ssid)
+        case .done:
+            HStack(spacing: 8) {
+                Icon(kind: .check, size: 20, color: Color(red: 0.05, green: 0.17, blue: 0.13))
+                Text("已连上！切回家里 Wi-Fi，回到设备")
+            }
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(Color(red: 0.05, green: 0.17, blue: 0.13))
+            .frame(maxWidth: .infinity, minHeight: 56)
+            .background(Theme.mint, in: Capsule())
+            .transition(.scale(scale: 0.92).combined(with: .opacity))
         }
     }
 
@@ -100,7 +130,7 @@ struct SetupView: View {
         if let err = validate() { note = err; phase = .failed; return }
         let name = ssid.trimmingCharacters(in: .whitespaces)
         UserDefaults.standard.set(name, forKey: "lastSSID")
-        phase = .sending
+        withAnimation { phase = .sending }
         note = ""
         let requestId = UUID().uuidString.lowercased()
         let deadline = Date().addingTimeInterval(60)
@@ -111,8 +141,8 @@ struct SetupView: View {
                 sentOnce = true
                 switch reply.state {
                 case "CONNECTED":
-                    phase = .done
-                    note = reply.ip.isEmpty ? "切回家里 Wi-Fi 后，到设备页点“自动查找”。" : "枕头地址 \(reply.ip)"
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.6)) { phase = .done }
+                    note = reply.ip.isEmpty ? "切回家里 Wi-Fi 后，App 会自动找到枕头。" : "枕头地址 \(reply.ip)"
                     if !reply.ip.isEmpty { client.host = reply.ip }
                     return
                 case "FAILED", "SAVE_FAILED":
@@ -132,11 +162,67 @@ struct SetupView: View {
                     note = "连不上枕头热点：请先在手机设置里连接 SmartPillow- 开头的热点"
                     return
                 }
-                // 枕头切换信道时热点会短暂断开，继续等
             }
             try? await Task.sleep(nanoseconds: 3_000_000_000)
         }
-        phase = .done
-        note = "没等到最终结果，但枕头可能已经连上了：切回家里 Wi-Fi，到设备页点“自动查找”。"
+        withAnimation { phase = .done }
+        note = "没等到最终结果，但枕头多半已经连上：切回家里 Wi-Fi，App 会自动查找。"
+    }
+}
+
+/// 紫色圆形图标：枕头上方的 Wi-Fi 波纹逐层亮起，外圈涟漪扩散。
+struct RippleIcon: View {
+    @State private var on = false
+    var body: some View {
+        ZStack {
+            ForEach(0..<2, id: \.self) { i in
+                Circle().stroke(Theme.lilac.opacity(0.7), lineWidth: 1.5)
+                    .scaleEffect(on ? 1.6 : 0.6)
+                    .opacity(on ? 0 : 0.7)
+                    .animation(.easeOut(duration: 2.4).repeatForever(autoreverses: false).delay(Double(i) * 1.2), value: on)
+            }
+            Circle()
+                .fill(LinearGradient(colors: [Theme.lavender, Theme.violet, Theme.indigo], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .overlay(Circle().strokeBorder(.white.opacity(0.25)))
+                .shadow(color: Theme.violet.opacity(0.8), radius: 14, y: 10)
+            Icon(kind: .wifiPillow, size: 44, color: .white)
+                .opacity(on ? 1 : 0.6)
+                .animation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true), value: on)
+        }
+        .frame(width: 96, height: 96)
+        .onAppear { on = true }
+        .accessibilityHidden(true)
+    }
+}
+
+/// 发送中：进度条加旋转的三点。
+struct SendingBar: View {
+    private let ssid: String
+    @State private var progress: CGFloat = 0
+    @State private var spin = false
+
+    init(ssid: String) { self.ssid = ssid }
+
+    var body: some View {
+        ZStack(alignment: .leading) {
+            GeometryReader { geo in
+                Capsule()
+                    .fill(LinearGradient(colors: [Theme.accent.opacity(0.2), Theme.lilac.opacity(0.5)], startPoint: .leading, endPoint: .trailing))
+                    .frame(width: geo.size.width * progress)
+            }
+            HStack(spacing: 10) {
+                Icon(kind: .reconnect, size: 20).rotationEffect(.degrees(spin ? 360 : 0))
+                Text("枕头正在连接 \(ssid)…").font(.system(size: 15))
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .frame(height: 56)
+        .background(Color.white.opacity(0.1), in: Capsule())
+        .overlay(Capsule().strokeBorder(.white.opacity(0.18)))
+        .clipShape(Capsule())
+        .onAppear {
+            withAnimation(.linear(duration: 30)) { progress = 1 }
+            withAnimation(.linear(duration: 1.4).repeatForever(autoreverses: false)) { spin = true }
+        }
     }
 }

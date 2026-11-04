@@ -14,6 +14,17 @@ final class PillowClient: ObservableObject {
     @Published private(set) var link: Link = .idle
     @Published private(set) var lastUpdate: Date?
     @Published private(set) var lastError: String?
+    /// 演示模式：没有枕头时用模拟数据，方便先体验界面和助眠流程。
+    @Published var demo = UserDefaults.standard.bool(forKey: "demoMode") {
+        didSet {
+            UserDefaults.standard.set(demo, forKey: "demoMode")
+            demoStart = Date()
+            failures = 0
+            lastError = nil
+            if !demo { link = host.isEmpty ? .idle : .searching }
+        }
+    }
+    private var demoStart = Date()
 
     var phoneIP: String { Network.localIPv4() ?? "未连接 Wi-Fi" }
 
@@ -41,7 +52,9 @@ final class PillowClient: ObservableObject {
             var lastScan = Date.distantPast
             while !Task.isCancelled {
                 guard let self else { return }
-                if self.host.isEmpty {
+                if self.demo {
+                    self.emitDemo()
+                } else if self.host.isEmpty {
                     // 首次授权“本地网络”前扫描会全部失败，所以没找到就每 10 秒再找一次
                     if Date().timeIntervalSince(lastScan) >= 10 {
                         lastScan = Date()
@@ -81,6 +94,41 @@ final class PillowClient: ObservableObject {
                 if host != old { failures = 0 }
             }
         }
+    }
+
+    /// 模拟一晚：先空枕 15 秒，然后躺下、有活动，再逐渐安静；呼吸约 13–15 次/分。
+    private func emitDemo() {
+        let t = Date().timeIntervalSince(demoStart)
+        let cycle = t.truncatingRemainder(dividingBy: 900)
+        let present = t > 15
+        let obs: String
+        let pose: String
+        if !present {
+            obs = "AWAY"; pose = "EMPTY"
+        } else if cycle < 90 || (cycle > 600 && cycle < 650) {
+            obs = "MOTION"; pose = cycle < 300 ? "SUPINE" : "LEFT"
+        } else {
+            obs = "QUIET"; pose = cycle < 420 ? "SUPINE" : cycle < 700 ? "LEFT" : "RIGHT"
+        }
+        let wobble = sin(t / 2.15 * .pi)
+        let base: [Double] = pose == "LEFT" ? [1800, 900, 200] : pose == "RIGHT" ? [200, 900, 1800] : pose == "SUPINE" ? [600, 1700, 600] : [0, 0, 0]
+        let json: [String: Any] = [
+            "version": 1,
+            "model_id": "demo",
+            "sensor": ["h1_mv": base[0] + wobble * 20, "h2_mv": base[1] + wobble * 30, "h3_mv": base[2] + wobble * 20,
+                       "pvdf_mv": 1070 + wobble * 6, "pvdf_delta_mv": wobble * 6],
+            "posture": ["pose": pose, "confidence": 0.9, "source": "DEMO"],
+            "behavior": ["session_id": 1, "state": "ACTIVE", "turn_count": Int(t / 240)],
+            "observation": ["status": obs],
+            "respiration": ["status": obs == "QUIET" ? "STABLE" : "MOTION",
+                            "rate_bpm": obs == "QUIET" ? (14 + wobble * 0.8) as Any : NSNull() as Any]
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: json),
+              let s = try? PillowStatus.decode(data) else { return }
+        status = s
+        lastUpdate = Date()
+        link = .connected
+        onStatus?(s)
     }
 
     /// 只接受 IPv4 或主机名，避免用户输入的空格、协议头导致无效 URL。
