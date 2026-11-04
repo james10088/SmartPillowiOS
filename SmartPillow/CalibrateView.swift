@@ -114,7 +114,7 @@ struct CalibrateView: View {
 
     private var pressureCard: some View {
         let s = client.status?.sensor
-        let values = [s?.h1Mv ?? 0, s?.h2Mv ?? 0, s?.h3Mv ?? 0]
+        let values: [Double] = [s?.h1Mv ?? 0, s?.h2Mv ?? 0, s?.h3Mv ?? 0]
         let names = ["左侧", "中间", "右侧"]
         return VStack(alignment: .leading, spacing: 12) {
             HStack {

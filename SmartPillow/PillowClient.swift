@@ -117,12 +117,12 @@ final class PillowClient: ObservableObject {
             "version": 1,
             "model_id": "demo",
             "sensor": ["h1_mv": base[0] + wobble * 20, "h2_mv": base[1] + wobble * 30, "h3_mv": base[2] + wobble * 20,
-                       "pvdf_mv": 1070 + wobble * 6, "pvdf_delta_mv": wobble * 6],
-            "posture": ["pose": pose, "confidence": 0.9, "source": "DEMO"],
-            "behavior": ["session_id": 1, "state": "ACTIVE", "turn_count": Int(t / 240)],
-            "observation": ["status": obs],
+                       "pvdf_mv": 1070 + wobble * 6, "pvdf_delta_mv": wobble * 6] as [String: Any],
+            "posture": ["pose": pose, "confidence": 0.9, "source": "DEMO"] as [String: Any],
+            "behavior": ["session_id": 1, "state": "ACTIVE", "turn_count": Int(t / 240)] as [String: Any],
+            "observation": ["status": obs] as [String: Any],
             "respiration": ["status": obs == "QUIET" ? "STABLE" : "MOTION",
-                            "rate_bpm": obs == "QUIET" ? (14 + wobble * 0.8) as Any : NSNull() as Any]
+                            "rate_bpm": obs == "QUIET" ? (14 + wobble * 0.8) as Any : NSNull() as Any] as [String: Any]
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: json),
               let s = try? PillowStatus.decode(data) else { return }
