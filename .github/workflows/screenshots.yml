@@ -44,8 +44,9 @@ jobs:
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
-            build | grep -E "error:|BUILD (SUCCEEDED|FAILED)" || true
-          test -d build/Build/Products/Debug-iphonesimulator/SmartPillow.app
+            build > build.log 2>&1 || true
+          grep -E "error:|BUILD (SUCCEEDED|FAILED)" build.log | sort -u || true
+          test -f build/Build/Products/Debug-iphonesimulator/SmartPillow.app/SmartPillow
 
       - name: Capture every screen
         shell: bash {0}

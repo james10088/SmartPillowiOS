@@ -31,8 +31,11 @@ jobs:
             -destination 'generic/platform=iOS' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build | tee build.log | grep -E "error:|warning: .*SmartPillow|BUILD (SUCCEEDED|FAILED)" || true
-          test -d build/Build/Products/Release-iphoneos/SmartPillow.app
+            build > build.log 2>&1 || true
+          grep -E "error:|BUILD (SUCCEEDED|FAILED)" build.log | sort -u > errors.txt || true
+          cat errors.txt
+          # 必须真的生成了可执行文件才算成功
+          test -f build/Build/Products/Release-iphoneos/SmartPillow.app/SmartPillow
 
       - name: Package IPA
         run: |
@@ -50,6 +53,17 @@ jobs:
         with:
           name: build-log
           path: build.log
+
+      - name: Publish build errors
+        if: failure()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: errors-${{ github.run_number }}
+          name: Build errors ${{ github.run_number }}
+          files: |
+            errors.txt
+            build.log
+          prerelease: true
 
       - name: Publish download
         uses: softprops/action-gh-release@v2
