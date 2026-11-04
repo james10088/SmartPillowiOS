@@ -48,35 +48,43 @@ jobs:
           test -d build/Build/Products/Debug-iphonesimulator/SmartPillow.app
 
       - name: Capture every screen
+        shell: bash {0}
         run: |
+          mkdir -p shots
+          exec > >(tee shots/capture.log) 2>&1
+          set -x
           UDID="${{ steps.sim.outputs.udid }}"
           APP=com.jarvishome.smartpillow
-          xcrun simctl boot "$UDID" || true
+          xcrun simctl boot "$UDID"
           xcrun simctl bootstatus "$UDID" -b
           xcrun simctl ui "$UDID" appearance dark
-          xcrun simctl status_bar "$UDID" override --time "22:47" --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3
+          xcrun simctl status_bar "$UDID" override --time "22:47" --batteryLevel 100
           xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/SmartPillow.app
-          mkdir -p shots
           for s in onboarding tonight recording report history assist device setup calibrate; do
             ONB=YES; [ "$s" = onboarding ] && ONB=NO
-            xcrun simctl terminate "$UDID" "$APP" 2>/dev/null || true
+            xcrun simctl terminate "$UDID" "$APP"
             xcrun simctl launch "$UDID" "$APP" \
               -uiScreen "$s" -onboarded "$ONB" -demoMode YES -demoOffset 200 -seedDemo YES \
               -AppleLanguages "(zh-Hans)" -AppleLocale zh_CN
             sleep 7
             xcrun simctl io "$UDID" screenshot "shots/$s.png"
           done
+          xcrun simctl spawn "$UDID" log show --last 3m --predicate 'process == "SmartPillow"' --style compact > shots/app.log 2>&1
           ls -l shots
+          exit 0
 
       - name: Package screenshots
-        run: cd shots && zip -q ../screens.zip *.png
+        if: always()
+        run: cd shots && zip -q ../screens.zip *
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: screenshots
           path: shots
 
       - name: Publish screenshots
+        if: always()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: shots-${{ github.run_number }}
