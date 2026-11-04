@@ -13,6 +13,8 @@ enum Theme {
 
     static let hero = LinearGradient(colors: [lavender, violet, indigo],
                                      startPoint: .topLeading, endPoint: .bottomTrailing)
+
+    static let zh = Locale(identifier: "zh_CN")
 }
 
 extension Font {
@@ -23,24 +25,29 @@ extension Font {
 }
 
 /// 背景：深色底加两团缓慢漂移的紫色光晕和闪烁的星星。
+/// 光晕放在 overlay 里，比屏幕大也不会撑宽页面。
 struct NightBackground: View {
     @State private var drift = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ZStack {
-            Theme.ground
-            Circle()
-                .fill(RadialGradient(colors: [Theme.violet.opacity(0.55), .clear], center: .center, startRadius: 0, endRadius: 240))
-                .frame(width: 480, height: 480)
-                .offset(x: drift ? -60 : -110, y: drift ? -230 : -280)
-            Circle()
-                .fill(RadialGradient(colors: [Theme.indigo.opacity(0.5), .clear], center: .center, startRadius: 0, endRadius: 220))
-                .frame(width: 440, height: 440)
-                .offset(x: drift ? 150 : 110, y: drift ? 260 : 300)
-            Stars()
-        }
-        .ignoresSafeArea()
+        Theme.ground
+            .overlay {
+                GeometryReader { geo in
+                    Circle()
+                        .fill(RadialGradient(colors: [Theme.violet.opacity(0.55), .clear], center: .center, startRadius: 0, endRadius: 240))
+                        .frame(width: 480, height: 480)
+                        .position(x: geo.size.width * (drift ? 0.35 : 0.2), y: geo.size.height * (drift ? 0.2 : 0.14))
+                    Circle()
+                        .fill(RadialGradient(colors: [Theme.indigo.opacity(0.5), .clear], center: .center, startRadius: 0, endRadius: 220))
+                        .frame(width: 440, height: 440)
+                        .position(x: geo.size.width * (drift ? 0.85 : 0.75), y: geo.size.height * (drift ? 0.8 : 0.86))
+                    Stars()
+                }
+                .allowsHitTesting(false)
+            }
+            .clipped()
+            .ignoresSafeArea()
         .onAppear {
             guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 18).repeatForever(autoreverses: true)) { drift = true }

@@ -13,6 +13,9 @@ final class PillowClient: ObservableObject {
     @Published private(set) var status: PillowStatus?
     @Published private(set) var link: Link = .idle
     @Published private(set) var lastUpdate: Date?
+    @Published private(set) var lastError: String?
+
+    var phoneIP: String { Network.localIPv4() ?? "未连接 Wi-Fi" }
 
     var onStatus: (@MainActor (PillowStatus) -> Void)?
 
@@ -35,10 +38,18 @@ final class PillowClient: ObservableObject {
     func start() {
         guard pollTask == nil else { return }
         pollTask = Task { [weak self] in
-            guard let self else { return }
-            if self.host.isEmpty { await self.discover() }
+            var lastScan = Date.distantPast
             while !Task.isCancelled {
-                await self.pollOnce()
+                guard let self else { return }
+                if self.host.isEmpty {
+                    // 首次授权“本地网络”前扫描会全部失败，所以没找到就每 10 秒再找一次
+                    if Date().timeIntervalSince(lastScan) >= 10 {
+                        lastScan = Date()
+                        await self.discover()
+                    }
+                } else {
+                    await self.pollOnce()
+                }
                 try? await Task.sleep(nanoseconds: 1_500_000_000)
             }
         }
@@ -56,17 +67,32 @@ final class PillowClient: ObservableObject {
             status = s
             lastUpdate = Date()
             failures = 0
+            lastError = nil
             link = .connected
             onStatus?(s)
         } catch {
+            lastError = Self.describe(error)
             failures += 1
             if failures >= 3 { link = .unreachable("连不上枕头（\(host)）") }
-            if failures == 10 { await discover() }
+            // 枕头的 IP 可能被路由器换掉：连续失败 10 次就重新扫描一次
+            if failures % 10 == 0 {
+                let old = host
+                await discover()
+                if host != old { failures = 0 }
+            }
         }
     }
 
+    /// 只接受 IPv4 或主机名，避免用户输入的空格、协议头导致无效 URL。
+    static func normalizedHost(_ raw: String) -> String {
+        var h = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        for p in ["http://", "https://"] where h.lowercased().hasPrefix(p) { h = String(h.dropFirst(p.count)) }
+        if let slash = h.firstIndex(of: "/") { h = String(h[..<slash]) }
+        return h.filter { $0.isLetter || $0.isNumber || $0 == "." || $0 == "-" || $0 == ":" }
+    }
+
     private func fetchStatus(host: String) async throws -> PillowStatus {
-        let url = URL(string: "http://\(host)/api/status")!
+        guard let url = URL(string: "http://\(host)/api/status") else { throw URLError(.badURL) }
         let (data, resp) = try await session.data(from: url)
         guard (resp as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
         return try PillowStatus.decode(data)
@@ -137,9 +163,35 @@ final class PillowClient: ObservableObject {
 
         if let found {
             host = found
+            lastError = nil
+            failures = 0
             link = .connected
+        } else if !host.isEmpty {
+            link = .unreachable("连不上枕头（\(host)），局域网里也没找到")
         } else {
+            lastError = "扫描了 \(prefix).1–254，没有设备回应"
             link = .unreachable("没找到枕头：确认它已开机、和手机在同一个 Wi-Fi")
+        }
+    }
+
+    /// 把网络错误翻译成能定位问题的中文说明。
+    static func describe(_ error: Error) -> String {
+        guard let e = error as? URLError else { return error.localizedDescription }
+        switch e.code {
+        case .timedOut:
+            return "请求超时（-1001）：手机可能开着 VPN / 代理，或和枕头不在同一网段"
+        case .notConnectedToInternet:
+            return "网络不可用（-1009）：请检查 设置 → 隐私与安全性 → 本地网络 是否已允许"
+        case .cannotConnectToHost:
+            return "连接被拒绝（-1004）：这个地址上没有运行枕头服务"
+        case .cannotFindHost, .dnsLookupFailed:
+            return "找不到地址（\(e.code.rawValue)）：请检查 IP 是否填对"
+        case .badServerResponse:
+            return "设备返回了异常数据"
+        case .badURL:
+            return "IP 地址格式不对"
+        default:
+            return "\(e.localizedDescription)（\(e.code.rawValue)）"
         }
     }
 

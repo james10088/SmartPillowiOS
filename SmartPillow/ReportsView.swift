@@ -30,8 +30,8 @@ struct ReportsView: View {
     private func row(_ s: SleepSession) -> some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(s.start.formatted(.dateTime.month().day())).font(.headline)
-                Text(s.start.formatted(.dateTime.weekday(.wide))).font(.caption).foregroundStyle(Theme.secondary)
+                Text(s.start.formatted(.dateTime.month().day().locale(Theme.zh))).font(.headline)
+                Text(s.start.formatted(.dateTime.weekday(.wide).locale(Theme.zh))).font(.caption).foregroundStyle(Theme.secondary)
             }
             .frame(width: 80, alignment: .leading)
             GeometryReader { geo in
@@ -127,7 +127,7 @@ struct ReportDetailView: View {
     }
 
     private var range: String {
-        let f = Date.FormatStyle.dateTime.month().day().hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)
+        let f = Date.FormatStyle.dateTime.month().day().hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).locale(Theme.zh)
         return "\(session.start.formatted(f)) – \((session.end ?? Date()).formatted(f))"
     }
 

@@ -4,6 +4,7 @@ import SwiftUI
 struct SmartPillowApp: App {
     @StateObject private var client: PillowClient
     @StateObject private var assist: AssistEngine
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         let c = PillowClient()
@@ -17,7 +18,13 @@ struct SmartPillowApp: App {
                 .environmentObject(client)
                 .environmentObject(assist)
                 .preferredColorScheme(.dark)
-                .onAppear { client.start() }
+                .onAppear {
+                    client.start()
+                    assist.ensureStandby()
+                }
+                .onChange(of: scenePhase) { phase in
+                    if phase == .active { assist.ensureStandby() }
+                }
         }
     }
 }

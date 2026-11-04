@@ -24,7 +24,14 @@ final class AssistEngine: ObservableObject {
     @Published private(set) var message: String?
     @Published var preset: AssistPreset { didSet { save() } }
     @Published var soundKind: SoundEngine.Kind { didSet { sound.kind = soundKind; save() } }
-    @Published var autoStart: Bool { didSet { save() } }
+    @Published var autoStart: Bool {
+        didSet {
+            save()
+            if autoStart { ensureStandby() } else if session == nil && !previewing { sound.stop(); standby = false }
+        }
+    }
+    /// 待命：引擎以 0 音量运行，让 App 锁屏后仍能轮询枕头、在你躺下时自动开始。
+    @Published private(set) var standby = false
     @Published var reverseLR: Bool { didSet { save() } }
     @Published private(set) var sessions: [SleepSession] = []
     @Published private(set) var previewing = false
@@ -43,6 +50,10 @@ final class AssistEngine: ObservableObject {
     private var level: Float = 0
     private var firstTurnCount: Int?
     private var previewTask: Task<Void, Never>?
+    private var messageTask: Task<Void, Never>?
+    private var soothingSince: Date?
+    /// 只有看到过一次“离枕”才允许自动开始，避免手动结束后人还躺着又被自动开启。
+    private var armed = false
 
     private let stepInterval: TimeInterval = 30
     private let stepSize: Float = 0.05
@@ -69,6 +80,26 @@ final class AssistEngine: ObservableObject {
 
     var levelPercent: Int { Int((level * 100).rounded()) }
 
+    func ensureStandby() {
+        guard autoStart, session == nil, !sound.isRunning else { return }
+        do {
+            try sound.start()
+            standby = true
+        } catch {
+            standby = false
+        }
+    }
+
+    private func flash(_ text: String) {
+        message = text
+        messageTask?.cancel()
+        messageTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 6_000_000_000)
+            guard !Task.isCancelled, self?.message == text else { return }
+            self?.message = nil
+        }
+    }
+
     // MARK: 开始 / 结束
 
     func startSession(manual: Bool) {
@@ -76,10 +107,13 @@ final class AssistEngine: ObservableObject {
         do {
             try sound.start()
         } catch {
-            message = "无法启动声音：\(error.localizedDescription)"
+            flash("无法启动声音：\(error.localizedDescription)")
             return
         }
         stopPreview()
+        standby = false
+        armed = false
+        soothingSince = Date()
         session = SleepSession(start: Date())
         firstTurnCount = client.status?.behavior?.turnCount
         quietSince = nil
@@ -88,7 +122,7 @@ final class AssistEngine: ObservableObject {
         cooldownUntil = .distantPast
         setLevel(preset.startLevel, over: 10)
         phase = .soothing
-        message = manual ? "已开始，今晚好好睡" : "检测到你躺下了，已自动开始助眠"
+        flash(manual ? "已开始，今晚好好睡" : "检测到你躺下了，已自动开始助眠")
         if client.status?.behavior?.state == "STOPPED" {
             Task { await client.command("BEHAVIOR_START") }
         }
@@ -97,16 +131,18 @@ final class AssistEngine: ObservableObject {
     func endSession() {
         guard var s = session else { return }
         s.end = Date()
-        if s.duration > 120 {
+        let saved = s.duration > 120
+        if saved {
             sessions.insert(s, at: 0)
             SessionStore.save(sessions)
         }
         session = nil
         phase = .idle
         presentSince = nil
+        armed = false
         setLevel(0, over: 3)
         stopSoundLater(after: 3.5)
-        message = "已结束，报告已保存"
+        flash(saved ? "已结束，报告已保存" : "记录不到 2 分钟，没有生成报告")
     }
 
     func deleteSession(_ id: UUID) {
@@ -118,7 +154,7 @@ final class AssistEngine: ObservableObject {
 
     func preview() {
         guard session == nil else { return }
-        do { try sound.start() } catch { message = "无法启动声音"; return }
+        do { try sound.start() } catch { flash("无法启动声音"); return }
         previewing = true
         sound.ramp(to: preset.startLevel, over: 2)
         previewTask?.cancel()
@@ -141,7 +177,12 @@ final class AssistEngine: ObservableObject {
         Task { @MainActor [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             guard let self, self.session == nil, !self.previewing else { return }
-            self.sound.stop()
+            if self.autoStart {
+                self.standby = true      // 保持 0 音量运行，继续待命
+            } else {
+                self.sound.stop()
+                self.standby = false
+            }
         }
     }
 
@@ -163,9 +204,11 @@ final class AssistEngine: ObservableObject {
         if act == .active { activeSince = activeSince ?? now } else { activeSince = nil }
         if act == .away { awaySince = awaySince ?? now; presentSince = nil } else { awaySince = nil; presentSince = presentSince ?? now }
 
-        // 自动开始：有人躺下并持续 20 秒
+        if act == .away { armed = true }
+
+        // 自动开始：枕头空过之后，有人躺下并持续 20 秒
         guard session != nil else {
-            if autoStart, act != .away, let p = presentSince, now.timeIntervalSince(p) >= 20 {
+            if autoStart, armed, act != .away, let p = presentSince, now.timeIntervalSince(p) >= 20 {
                 startSession(manual: false)
             }
             return
@@ -198,7 +241,9 @@ final class AssistEngine: ObservableObject {
 
         switch phase {
         case .soothing, .reassist:
-            if quietFor >= wait {
+            // 一直没稳定安静（例如状态识别不准）时，45 分钟后也开始渐弱，不让声音整夜响着
+            let tooLong = phase == .soothing && now.timeIntervalSince(soothingSince ?? now) >= 45 * 60
+            if quietFor >= wait || tooLong {
                 phase = .fading
                 lastStep = now
             } else if phase == .reassist, now.timeIntervalSince(lastStep) >= stepInterval, level < preset.capLevel {

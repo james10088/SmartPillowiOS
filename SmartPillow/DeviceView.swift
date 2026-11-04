@@ -24,6 +24,7 @@ struct DeviceView: View {
             .toolbar(.hidden, for: .navigationBar)
         }
         .onAppear { editingHost = client.host }
+        .onChange(of: client.host) { editingHost = $0 }
     }
 
     // MARK: 枕头连接
@@ -38,6 +39,12 @@ struct DeviceView: View {
                     Text(linkText).font(.footnote)
                 }
                 .foregroundStyle(.white.opacity(0.92))
+                VStack(spacing: 2) {
+                    Text("手机 IP：\(client.phoneIP)")
+                    if let err = client.lastError { Text(err).multilineTextAlignment(.center) }
+                }
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.75))
                 HStack(spacing: 8) {
                     TextField("枕头 IP，例如 192.168.31.47", text: $editingHost)
                         .keyboardType(.numbersAndPunctuation)
@@ -45,7 +52,12 @@ struct DeviceView: View {
                         .autocorrectionDisabled()
                         .padding(.horizontal, 14).frame(height: 44)
                         .background(.white.opacity(0.18), in: Capsule())
-                        .onSubmit { client.host = editingHost.trimmingCharacters(in: .whitespaces) }
+                        .submitLabel(.go)
+                        .onSubmit {
+                            let h = PillowClient.normalizedHost(editingHost)
+                            editingHost = h
+                            client.host = h
+                        }
                     Button("自动查找") {
                         Task {
                             await client.discover()

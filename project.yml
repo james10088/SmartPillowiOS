@@ -13,6 +13,10 @@ targets:
       path: SmartPillow/Info.plist
       properties:
         CFBundleDisplayName: 智能枕头
+        CFBundleDevelopmentRegion: zh-Hans
+        CFBundleLocalizations:
+          - zh-Hans
+        CFBundleAllowMixedLocalizations: true
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
         UILaunchScreen: {}

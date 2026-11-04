@@ -38,7 +38,7 @@ struct TonightView: View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(greeting).font(.display(30)).lineSpacing(4)
-                Text(Date.now.formatted(.dateTime.month().day().weekday(.wide)))
+                Text(Date.now.formatted(.dateTime.month().day().weekday(.wide).locale(Theme.zh)))
                     .font(.footnote).foregroundStyle(Theme.secondary)
             }
             Spacer()
@@ -71,10 +71,10 @@ struct TonightView: View {
                 } else {
                     Text("现在").font(.footnote).foregroundStyle(.white.opacity(0.9))
                     TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                        Text(ctx.date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits)))
+                        Text(ctx.date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).locale(Theme.zh)))
                             .font(.numeral(84)).monospacedDigit()
                     }
-                    Text(assist.autoStart ? "躺下后会自动开始助眠" : "自动开始已关闭")
+                    Text(assist.autoStart ? (assist.standby ? "待命中 · 锁屏后躺下也会自动开始" : "躺下后会自动开始助眠") : "自动开始已关闭")
                         .font(.footnote).foregroundStyle(.white.opacity(0.9))
                     Button {
                         assist.startSession(manual: true)

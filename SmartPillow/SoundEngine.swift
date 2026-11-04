@@ -39,10 +39,37 @@ final class SoundEngine {
 
     var level: Float { targetGain }
 
+    private var observers: [NSObjectProtocol] = []
+
+    init() {
+        let nc = NotificationCenter.default
+        // 连接或断开蓝牙音箱时引擎会被系统停掉，这里自动重启
+        observers.append(nc.addObserver(forName: .AVAudioEngineConfigurationChange, object: engine, queue: .main) { [weak self] _ in
+            self?.restartIfNeeded()
+        })
+        // 来电、闹钟等打断结束后恢复
+        observers.append(nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+            guard let raw = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+                  AVAudioSession.InterruptionType(rawValue: raw) == .ended else { return }
+            self?.restartIfNeeded()
+        })
+    }
+
+    deinit {
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+    }
+
+    private func restartIfNeeded() {
+        guard isRunning, !engine.isRunning else { return }
+        try? AVAudioSession.sharedInstance().setActive(true)
+        try? engine.start()
+    }
+
     func start() throws {
         guard !isRunning else { return }
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playback, mode: .default, options: [])
+        // mixWithOthers：不会打断用户正在听的音乐；后台播放依然有效
+        try session.setCategory(.playback, mode: .default, options: [.mixWithOthers])
         try session.setActive(true)
 
         let output = engine.outputNode.inputFormat(forBus: 0)
@@ -59,11 +86,16 @@ final class SoundEngine {
             }
             return noErr
         }
-        source = node
         engine.attach(node)
         engine.connect(node, to: engine.mainMixerNode, format: format)
         engine.prepare()
-        try engine.start()
+        do {
+            try engine.start()
+        } catch {
+            engine.detach(node)
+            throw error
+        }
+        source = node
         isRunning = true
     }
 
