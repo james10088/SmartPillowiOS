@@ -79,6 +79,10 @@ struct RootView: View {
         .fullScreenCover(isPresented: Binding(get: { !onboarded }, set: { onboarded = !$0 })) {
             OnboardingView { goSetup in
                 onboarded = true
+                // 等欢迎页收起后再弹记录页，避免两个全屏页叠在一起
+                if assist.session != nil {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { showRecording = assist.session != nil }
+                }
                 if goSetup {
                     tab = .device
                     devicePath = [.setup]
@@ -95,8 +99,9 @@ struct RootView: View {
             openScreenFromLaunchArgument()
         }
         .onChange(of: assist.session?.id) { id in
-            // 开始记录（手动或自动）就进入“记录中”全屏页，结束后退出
-            showRecording = id != nil
+            // 开始记录（手动或自动）就进入“记录中”全屏页，结束后退出。
+            // 欢迎页还在时不弹：两个全屏页同时出现会让界面黑屏。
+            showRecording = id != nil && onboarded
         }
     }
 

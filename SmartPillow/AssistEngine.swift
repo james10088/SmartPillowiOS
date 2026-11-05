@@ -210,9 +210,9 @@ final class AssistEngine: ObservableObject {
 
         if act == .away { armed = true }
 
-        // 自动开始：枕头空过之后，有人躺下并持续 20 秒
+        // 自动开始：枕头空过之后，有人躺下并持续 20 秒（还没走完首次引导时不自动开始）
         guard session != nil else {
-            if autoStart, armed, act != .away, let p = presentSince, now.timeIntervalSince(p) >= 20 {
+            if autoStart, armed, UserDefaults.standard.bool(forKey: "onboarded"), act != .away, let p = presentSince, now.timeIntervalSince(p) >= 20 {
                 startSession(manual: false)
             }
             return
