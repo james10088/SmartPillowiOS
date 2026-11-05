@@ -61,6 +61,9 @@ jobs:
           xcrun simctl ui "$UDID" appearance dark
           xcrun simctl status_bar "$UDID" override --time "22:47" --batteryLevel 100
           xcrun simctl install "$UDID" build/Build/Products/Release-iphonesimulator/SmartPillow.app
+          # 冷启动一次再开始拍：慢机器上第一次启动常常还没画出来
+          xcrun simctl launch "$UDID" "$APP" -uiScreen tonight -onboarded YES -demoMode YES
+          sleep 25
           for s in onboarding tonight recording report history assist device setup calibrate; do
             ONB=YES; [ "$s" = onboarding ] && ONB=NO
             xcrun simctl terminate "$UDID" "$APP"
