@@ -2,6 +2,8 @@ name: Debug Onboarding
 
 # 在云端 iPhone 模拟器里用演示数据逐页截图，打包发布到 Releases，方便不连手机也能检查界面。
 on:
+  push:
+    paths: ['.github/workflows/debug-onboarding.yml']
   workflow_dispatch:
 
 permissions:
