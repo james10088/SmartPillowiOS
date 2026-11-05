@@ -83,6 +83,8 @@ final class AssistEngine: ObservableObject {
     var levelPercent: Int { Int((level * 100).rounded()) }
 
     func ensureStandby() {
+        // 截图模式（启动参数 -uiScreen）只为看界面，不开后台音频
+        guard UserDefaults.standard.string(forKey: "uiScreen") == nil else { return }
         guard autoStart, session == nil, !sound.isRunning else { return }
         do {
             try sound.start()

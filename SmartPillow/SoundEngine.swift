@@ -76,8 +76,16 @@ final class SoundEngine {
         sampleRate = output.sampleRate > 0 ? output.sampleRate : 44_100
         guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1) else { return }
 
-        let node = AVAudioSourceNode { [unowned self] _, _, frameCount, bufferList -> OSStatus in
+        let node = AVAudioSourceNode { [unowned self] isSilence, _, frameCount, bufferList -> OSStatus in
             let buffers = UnsafeMutableAudioBufferListPointer(bufferList)
+            // 待命或已淡出（音量为 0）时直接填静音，不逐个采样计算，整夜待命几乎不占 CPU
+            if self.currentGain <= 0 && self.targetGain <= 0 {
+                for buffer in buffers {
+                    if let data = buffer.mData { memset(data, 0, Int(buffer.mDataByteSize)) }
+                }
+                isSilence.pointee = true
+                return noErr
+            }
             for frame in 0..<Int(frameCount) {
                 let s = self.nextSample()
                 for buffer in buffers {

@@ -39,14 +39,14 @@ jobs:
           xcodebuild \
             -project SmartPillow.xcodeproj \
             -scheme SmartPillow \
-            -configuration Debug \
+            -configuration Release \
             -sdk iphonesimulator \
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             build > build.log 2>&1 || true
           grep -E "error:|BUILD (SUCCEEDED|FAILED)" build.log | sort -u || true
-          test -f build/Build/Products/Debug-iphonesimulator/SmartPillow.app/SmartPillow
+          test -f build/Build/Products/Release-iphonesimulator/SmartPillow.app/SmartPillow
 
       - name: Capture every screen
         shell: bash {0}
@@ -60,7 +60,7 @@ jobs:
           xcrun simctl bootstatus "$UDID" -b
           xcrun simctl ui "$UDID" appearance dark
           xcrun simctl status_bar "$UDID" override --time "22:47" --batteryLevel 100
-          xcrun simctl install "$UDID" build/Build/Products/Debug-iphonesimulator/SmartPillow.app
+          xcrun simctl install "$UDID" build/Build/Products/Release-iphonesimulator/SmartPillow.app
           for s in onboarding tonight recording report history assist device setup calibrate; do
             ONB=YES; [ "$s" = onboarding ] && ONB=NO
             xcrun simctl terminate "$UDID" "$APP"
