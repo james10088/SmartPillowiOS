@@ -32,7 +32,7 @@ struct DeviceView: View {
     private var pillowCard: some View {
         HeroCard(padding: 20) {
             VStack(spacing: 6) {
-                PillowArt().frame(height: 128)
+                PillowArt().frame(height: 132)
                 Text("我的智能枕头").font(.xiaowei(22))
                 HStack(spacing: 6) {
                     if client.link == .connected { PulseDot() } else { Circle().fill(Theme.amber).frame(width: 7, height: 7) }
@@ -230,48 +230,48 @@ struct DeviceView: View {
     }
 }
 
-/// 设计稿里的立体枕头：渐变、高光、四角褶皱、投影，三个传感点依次亮起。
+/// 用户自己设计的枕头（Blender 工程「智能枕头_产品渲染_v2_白棚」雾紫·夜蓝配色渲染），
+/// 轻轻浮动，枕面上三个压力传感点依次亮起。
 struct PillowArt: View {
     @State private var on = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private let sensors: Bool
+
+    init(sensors: Bool = true) { self.sensors = sensors }
+
+    /// 渲染图宽高比，以及三个传感点在图里的相对位置（由相机投影算出）
+    static let aspect: CGFloat = 1820 / 849
+    private static let sensorPoints: [UnitPoint] = [UnitPoint(x: 0.321, y: 0.196), UnitPoint(x: 0.499, y: 0.369), UnitPoint(x: 0.690, y: 0.413)]
 
     var body: some View {
         GeometryReader { geo in
-            let w = min(geo.size.width, 230 * geo.size.height / 128)
-            let h = w * 128 / 230
+            let w = min(geo.size.width, geo.size.height * Self.aspect)
+            let h = w / Self.aspect
             ZStack {
-                // 投影用径向渐变代替 blur：观感一样，但不需要每帧重新模糊
                 Ellipse()
-                    .fill(RadialGradient(colors: [Color(red: 25 / 255, green: 12 / 255, blue: 70 / 255).opacity(0.6), .clear],
-                                         center: .center, startRadius: 0, endRadius: w * 0.4))
-                    .frame(width: w * 0.85, height: h * 0.18)
-                    .scaleEffect(on ? 0.88 : 1)
-                    .offset(y: h * 0.4)
+                    .fill(RadialGradient(colors: [Color(red: 20 / 255, green: 10 / 255, blue: 60 / 255).opacity(0.65), .clear],
+                                         center: .center, startRadius: 0, endRadius: w * 0.42))
+                    .frame(width: w * 0.86, height: h * 0.26)
+                    .scaleEffect(on ? 0.9 : 1)
+                    .offset(x: w * 0.04, y: h * 0.42)
                 ZStack {
-                    PuffyPillow()
-                        .fill(RadialGradient(colors: [.white, Color(red: 0.93, green: 0.91, blue: 1), Color(red: 0.76, green: 0.70, blue: 0.97),
-                                                      Color(red: 0.61, green: 0.53, blue: 0.93)],
-                                             center: UnitPoint(x: 0.38, y: 0.28), startRadius: 2, endRadius: w * 0.75))
-                    PuffyPillow()
-                        .fill(LinearGradient(colors: [.clear, Theme.indigo.opacity(0.38)], startPoint: UnitPoint(x: 0.5, y: 0.45), endPoint: .bottom))
-                    PuffyPillow().stroke(.white.opacity(0.75), lineWidth: 1)
-                    PillowCreases().stroke(Color(red: 90 / 255, green: 64 / 255, blue: 180 / 255).opacity(0.32), style: StrokeStyle(lineWidth: 1.3, lineCap: .round))
-                    Ellipse()
-                        .fill(RadialGradient(colors: [.white.opacity(0.85), .white.opacity(0)], center: .center, startRadius: 0, endRadius: w * 0.26))
-                        .frame(width: w * 0.52, height: h * 0.18)
-                        .offset(x: -w * 0.08, y: -h * 0.2)
-                    HStack(spacing: w * 0.065) {
+                    Image("PillowHero")
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: w, height: h)
+                    if sensors {
                         ForEach(0..<3, id: \.self) { i in
-                            Circle()
-                                .fill(RadialGradient(colors: [.white, Color(red: 180 / 255, green: 156 / 255, blue: 255 / 255).opacity(0.9), Theme.violet.opacity(0)],
-                                                     center: .center, startRadius: 0, endRadius: w * 0.065))
-                                .frame(width: w * 0.13, height: w * 0.13)
-                                .scaleEffect(on ? 1.1 : 0.75)
-                                .opacity(on ? 1 : 0.35)
+                            let pt = Self.sensorPoints[i]
+                            Ellipse()
+                                .fill(RadialGradient(colors: [.white, Color(red: 180 / 255, green: 156 / 255, blue: 255 / 255).opacity(0.8), Theme.violet.opacity(0)],
+                                                     center: .center, startRadius: 0, endRadius: w * 0.045))
+                                .frame(width: w * 0.09, height: w * 0.05)
+                                .scaleEffect(on ? 1.1 : 0.7)
+                                .opacity(on ? 0.95 : 0.25)
                                 .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true).delay(Double(i) * 0.4), value: on)
+                                .position(x: pt.x * w, y: pt.y * h)
                         }
                     }
-                    .offset(y: h * 0.06)
                 }
                 .frame(width: w, height: h)
                 .offset(y: on ? -6 : 0)
@@ -281,35 +281,5 @@ struct PillowArt: View {
         }
         .onAppear { if !reduceMotion { on = true } }
         .accessibilityHidden(true)
-    }
-}
-
-/// 蓬松枕头轮廓（原始坐标 230×128）。
-struct PuffyPillow: Shape {
-    func path(in r: CGRect) -> Path {
-        let sx = r.width / 230, sy = r.height / 128
-        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: r.minX + x * sx, y: r.minY + y * sy) }
-        var path = Path()
-        path.move(to: p(28, 32))
-        path.addCurve(to: p(202, 32), control1: p(72, 14), control2: p(158, 14))
-        path.addCurve(to: p(202, 100), control1: p(215, 54), control2: p(215, 80))
-        path.addCurve(to: p(28, 100), control1: p(158, 116), control2: p(72, 116))
-        path.addCurve(to: p(28, 32), control1: p(15, 80), control2: p(15, 54))
-        path.closeSubpath()
-        return path
-    }
-}
-
-/// 四个角的褶皱线。
-struct PillowCreases: Shape {
-    func path(in r: CGRect) -> Path {
-        let sx = r.width / 230, sy = r.height / 128
-        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: r.minX + x * sx, y: r.minY + y * sy) }
-        var path = Path()
-        path.move(to: p(28, 32)); path.addQuadCurve(to: p(40, 49), control: p(36, 38))
-        path.move(to: p(202, 32)); path.addQuadCurve(to: p(190, 49), control: p(194, 38))
-        path.move(to: p(28, 100)); path.addQuadCurve(to: p(40, 83), control: p(36, 94))
-        path.move(to: p(202, 100)); path.addQuadCurve(to: p(190, 83), control: p(194, 94))
-        return path
     }
 }

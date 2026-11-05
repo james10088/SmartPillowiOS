@@ -34,14 +34,46 @@ struct Icon: View {
         return p
     }
 
+    /// 用户设计的枕头侧面轮廓：两端高、颈托处下凹、中间一个小鼓包（按 Blender 侧视渲染描出，高度适当夸张）。
     private var pillowShape: Path {
         var p = Path()
-        p.move(to: CGPoint(x: 4, y: 9.5))
-        p.addCurve(to: CGPoint(x: 20, y: 9.5), control1: CGPoint(x: 4, y: 6.4), control2: CGPoint(x: 20, y: 6.4))
-        p.addLine(to: CGPoint(x: 20.8, y: 15.5))
-        p.addCurve(to: CGPoint(x: 3.2, y: 15.5), control1: CGPoint(x: 20.8, y: 18.6), control2: CGPoint(x: 3.2, y: 18.6))
+        p.move(to: CGPoint(x: 4.6, y: 16.8))
+        p.addCurve(to: CGPoint(x: 2.4, y: 13.2), control1: CGPoint(x: 3.1, y: 16.8), control2: CGPoint(x: 2.4, y: 15.2))
+        p.addCurve(to: CGPoint(x: 5.8, y: 9.0), control1: CGPoint(x: 2.4, y: 10.6), control2: CGPoint(x: 3.8, y: 9.0))
+        p.addCurve(to: CGPoint(x: 9.0, y: 10.8), control1: CGPoint(x: 7.4, y: 9.0), control2: CGPoint(x: 8.0, y: 10.8))
+        p.addCurve(to: CGPoint(x: 12, y: 9.5), control1: CGPoint(x: 10.1, y: 10.8), control2: CGPoint(x: 10.8, y: 9.5))
+        p.addCurve(to: CGPoint(x: 15, y: 10.8), control1: CGPoint(x: 13.2, y: 9.5), control2: CGPoint(x: 13.9, y: 10.8))
+        p.addCurve(to: CGPoint(x: 18.2, y: 9.0), control1: CGPoint(x: 16, y: 10.8), control2: CGPoint(x: 16.6, y: 9.0))
+        p.addCurve(to: CGPoint(x: 21.6, y: 13.2), control1: CGPoint(x: 20.2, y: 9.0), control2: CGPoint(x: 21.6, y: 10.6))
+        p.addCurve(to: CGPoint(x: 19.4, y: 16.8), control1: CGPoint(x: 21.6, y: 15.2), control2: CGPoint(x: 20.9, y: 16.8))
         p.closeSubpath()
         return p
+    }
+
+    /// 侧面拼色区：缝线两端高、中间低，和实物的顶面/侧面分色一致。
+    private var pillowSideBand: Path {
+        var p = Path()
+        p.move(to: CGPoint(x: 2, y: 12.4))
+        p.addCurve(to: CGPoint(x: 12, y: 15.3), control1: CGPoint(x: 5, y: 13.1), control2: CGPoint(x: 8, y: 15.3))
+        p.addCurve(to: CGPoint(x: 22, y: 12.4), control1: CGPoint(x: 16, y: 15.3), control2: CGPoint(x: 19, y: 13.1))
+        p.addLine(to: CGPoint(x: 22, y: 18))
+        p.addLine(to: CGPoint(x: 2, y: 18))
+        p.closeSubpath()
+        return p
+    }
+
+    /// 顶面用 body，侧面拼色区用 band，两块互不叠加，单色图标也能看出双色。
+    private func pillow(_ ctx: inout GraphicsContext, _ t: CGAffineTransform = .identity, body: GraphicsContext.Shading, band: GraphicsContext.Shading) {
+        let shape = pillowShape.applying(t)
+        let bandPath = pillowSideBand.applying(t)
+        ctx.drawLayer { layer in
+            layer.clip(to: bandPath, options: .inverse)
+            layer.fill(shape, with: body)
+        }
+        ctx.drawLayer { layer in
+            layer.clip(to: shape)
+            layer.fill(bandPath, with: band)
+        }
     }
 
     private func crescent(_ ctx: inout GraphicsContext, cx: CGFloat, cy: CGFloat, r: CGFloat, cutX: CGFloat, cutY: CGFloat, cutR: CGFloat) {
@@ -76,9 +108,9 @@ struct Icon: View {
             ctx.stroke(wave(12.5), with: dim(0.7), style: round)
             ctx.stroke(wave(7), with: dim(0.4), style: round)
         case .pillow:
-            ctx.fill(pillowShape, with: dim(0.92))
-            for (x, y) in [(8.0, 13.0), (12.0, 13.3), (16.0, 13.0)] {
-                ctx.fill(circle(x, y, 1.1), with: .color(cutout))
+            pillow(&ctx, body: dim(0.95), band: dim(0.5))
+            for (x, y) in [(7.6, 12.6), (12.0, 12.7), (16.4, 12.6)] {
+                ctx.fill(circle(x, y, 0.95), with: .color(cutout))
             }
         case .fadeBars:
             ctx.fill(Path(roundedRect: CGRect(x: 3, y: 5, width: 4, height: 14), cornerRadius: 2), with: c)
@@ -142,13 +174,7 @@ struct Icon: View {
             ctx.fill(lens, with: dim(0.25))
             crescent(&ctx, cx: 12, cy: 12, r: 4, cutX: 14.2, cutY: 10, cutR: 3)
         case .wifiPillow:
-            var base = Path()
-            base.move(to: CGPoint(x: 5, y: 15.5))
-            base.addCurve(to: CGPoint(x: 19, y: 15.5), control1: CGPoint(x: 5, y: 13.6), control2: CGPoint(x: 19, y: 13.6))
-            base.addLine(to: CGPoint(x: 19.6, y: 19.1))
-            base.addCurve(to: CGPoint(x: 4.4, y: 19.1), control1: CGPoint(x: 19.6, y: 21.1), control2: CGPoint(x: 4.4, y: 21.1))
-            base.closeSubpath()
-            ctx.fill(base, with: c)
+            pillow(&ctx, CGAffineTransform(a: 0.78, b: 0, c: 0, d: 0.78, tx: 2.64, ty: 7.18), body: c, band: dim(0.55))
             for (i, r) in [3.5, 6.2, 8.8].enumerated() {
                 var arc = Path()
                 arc.addArc(center: CGPoint(x: 12, y: 13.2), radius: r, startAngle: .degrees(-140), endAngle: .degrees(-40), clockwise: false)
@@ -166,8 +192,8 @@ struct Icon: View {
             ctx.fill(circle(19.4, 15.5, 1.7), with: dim(0.6))
             ctx.fill(circle(4.6, 15.5, 1.2), with: dim(0.3))
         case .swapPillow:
-            ctx.fill(Path(roundedRect: CGRect(x: 2.5, y: 9, width: 8, height: 6), cornerRadius: 3), with: c)
-            ctx.fill(Path(roundedRect: CGRect(x: 13.5, y: 9, width: 8, height: 6), cornerRadius: 3), with: dim(0.45))
+            pillow(&ctx, CGAffineTransform(a: 0.44, b: 0, c: 0, d: 0.5, tx: 1.22, ty: 5.6), body: c, band: dim(0.55))
+            pillow(&ctx, CGAffineTransform(a: 0.44, b: 0, c: 0, d: 0.5, tx: 12.22, ty: 5.6), body: dim(0.45), band: dim(0.25))
             var top = Path()
             top.move(to: CGPoint(x: 6.5, y: 6.5))
             top.addQuadCurve(to: CGPoint(x: 17.5, y: 6.5), control: CGPoint(x: 12, y: 1.5))
