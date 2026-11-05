@@ -10,7 +10,12 @@ permissions:
 
 jobs:
   build:
-    runs-on: macos-15
+    # Apple 芯片的 Mac 机器经常排队很久，同时在 Intel Mac 上编译，先完成的那个发布安装包
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -45,13 +50,13 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: SmartPillow-ipa
+          name: SmartPillow-ipa-${{ matrix.os }}
           path: SmartPillow.ipa
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: build-log
+          name: build-log-${{ matrix.os }}
           path: build.log
 
       - name: Publish build errors
