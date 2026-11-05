@@ -17,6 +17,7 @@ struct OnboardingView: View {
             Text("让枕头，\n安静地陪你入睡")
                 .font(.xiaowei(32)).tracking(2).lineSpacing(10)
                 .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 40)
                 .rise(0.15)
             VStack(spacing: 10) {

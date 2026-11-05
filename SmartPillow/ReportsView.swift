@@ -187,7 +187,7 @@ struct ReportView: View {
                         let color: Color = seg.kind == .away ? Theme.tertiary.opacity(0.7) : seg.kind == .active ? Theme.blush : Theme.lavender
                         Capsule()
                             .fill(color)
-                            .shadow(color: seg.kind == .away ? .clear : color.opacity(0.6), radius: 6)
+                            .overlay(Capsule().strokeBorder(.white.opacity(seg.kind == .away ? 0 : 0.25), lineWidth: 1))
                             .frame(width: max(5, w * (seg.end - seg.start) / total - 2), height: 20)
                             .scaleEffect(x: appear ? 1 : 0, anchor: .leading)
                             .animation(.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.7).delay(0.5 + Double(min(i, 30)) * 0.05), value: appear)

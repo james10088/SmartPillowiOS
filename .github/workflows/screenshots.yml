@@ -67,10 +67,17 @@ jobs:
             xcrun simctl launch "$UDID" "$APP" \
               -uiScreen "$s" -onboarded "$ONB" -demoMode YES -demoOffset 200 -seedDemo YES \
               -AppleLanguages "(zh-Hans)" -AppleLocale zh_CN
-            sleep 7
+            sleep 10
             xcrun simctl io "$UDID" screenshot "shots/$s.png"
+            # 报告和设备页额外再拍一张，用来区分“渲染慢”和“卡死”
+            if [ "$s" = report ] || [ "$s" = device ]; then
+              sleep 15
+              xcrun simctl io "$UDID" screenshot "shots/${s}-late.png"
+            fi
           done
-          xcrun simctl spawn "$UDID" log show --last 3m --predicate 'process == "SmartPillow"' --style compact > shots/app.log 2>&1
+          xcrun simctl spawn "$UDID" log show --last 15m --predicate 'process == "SmartPillow" AND (messageType == error OR messageType == fault)' --style compact > shots/app.log 2>&1
+          ls ~/Library/Logs/DiagnosticReports/ 2>/dev/null | grep -i smartpillow > shots/crashes.txt || true
+          cp ~/Library/Logs/DiagnosticReports/SmartPillow* shots/ 2>/dev/null || true
           ls -l shots
           exit 0
 

@@ -144,7 +144,7 @@ struct TonightView: View {
                 StatTile(value: last.map { "\(Int(($0.quietRatio * 100).rounded()))%" } ?? "—", label: "安静占比")
             }
             NavigationLink(value: Route.history) {
-                StatTile(value: "\(assist.streak)", label: "连续记录 晚", tint: Theme.mint)
+                StatTile(value: "\(assist.streak)", label: "连续记录晚数", tint: Theme.mint)
             }
         }
         .buttonStyle(.plain)

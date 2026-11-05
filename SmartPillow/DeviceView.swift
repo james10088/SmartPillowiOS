@@ -240,10 +240,11 @@ struct PillowArt: View {
             let w = min(geo.size.width, 230 * geo.size.height / 128)
             let h = w * 128 / 230
             ZStack {
+                // 投影用径向渐变代替 blur：观感一样，但不需要每帧重新模糊
                 Ellipse()
-                    .fill(Color(red: 25 / 255, green: 12 / 255, blue: 70 / 255).opacity(0.55))
-                    .frame(width: w * 0.75, height: h * 0.11)
-                    .blur(radius: 5)
+                    .fill(RadialGradient(colors: [Color(red: 25 / 255, green: 12 / 255, blue: 70 / 255).opacity(0.6), .clear],
+                                         center: .center, startRadius: 0, endRadius: w * 0.4))
+                    .frame(width: w * 0.85, height: h * 0.18)
                     .scaleEffect(on ? 0.88 : 1)
                     .offset(y: h * 0.4)
                 ZStack {
@@ -255,9 +256,9 @@ struct PillowArt: View {
                         .fill(LinearGradient(colors: [.clear, Theme.indigo.opacity(0.38)], startPoint: UnitPoint(x: 0.5, y: 0.45), endPoint: .bottom))
                     PuffyPillow().stroke(.white.opacity(0.75), lineWidth: 1)
                     PillowCreases().stroke(Color(red: 90 / 255, green: 64 / 255, blue: 180 / 255).opacity(0.32), style: StrokeStyle(lineWidth: 1.3, lineCap: .round))
-                    Ellipse().fill(.white.opacity(0.8))
-                        .frame(width: w * 0.49, height: h * 0.14)
-                        .blur(radius: 2.5)
+                    Ellipse()
+                        .fill(RadialGradient(colors: [.white.opacity(0.85), .white.opacity(0)], center: .center, startRadius: 0, endRadius: w * 0.26))
+                        .frame(width: w * 0.52, height: h * 0.18)
                         .offset(x: -w * 0.08, y: -h * 0.2)
                     HStack(spacing: w * 0.065) {
                         ForEach(0..<3, id: \.self) { i in
