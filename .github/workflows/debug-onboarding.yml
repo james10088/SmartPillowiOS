@@ -1,0 +1,94 @@
+name: Debug Onboarding
+
+# 在云端 iPhone 模拟器里用演示数据逐页截图，打包发布到 Releases，方便不连手机也能检查界面。
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  shots:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Pick an iPhone simulator
+        id: sim
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)["devices"]
+          phones = [x for k, v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone")]
+          pro = [x for x in phones if "Pro" in x["name"] and "Max" not in x["name"]]
+          print((pro or phones)[-1]["udid"])')
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl list devices | grep "$UDID"
+
+      - name: Build for simulator
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project SmartPillow.xcodeproj \
+            -scheme SmartPillow \
+            -configuration Release \
+            -sdk iphonesimulator \
+            -destination "id=${{ steps.sim.outputs.udid }}" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build > build.log 2>&1 || true
+          grep -E "error:|BUILD (SUCCEEDED|FAILED)" build.log | sort -u || true
+          test -f build/Build/Products/Release-iphonesimulator/SmartPillow.app/SmartPillow
+
+      - name: Debug onboarding
+        shell: bash {0}
+        run: |
+          mkdir -p shots
+          exec > >(tee shots/capture.log) 2>&1
+          set -x
+          UDID="${{ steps.sim.outputs.udid }}"
+          APP=com.jarvishome.smartpillow
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance dark
+          xcrun simctl install "$UDID" build/Build/Products/Release-iphonesimulator/SmartPillow.app
+          for args in "-uiScreen onboarding -onboarded NO -demoMode YES" "-onboarded NO" "-uiScreen device -onboarded YES -demoMode YES"; do
+            n=$(echo "$args" | tr -c 'a-zA-Z' '_' | cut -c1-40)
+            xcrun simctl terminate "$UDID" "$APP"
+            OUT=$(xcrun simctl launch "$UDID" "$APP" $args -AppleLanguages "(zh-Hans)")
+            PID=${OUT##*: }
+            for t in 5 15 35; do
+              sleep $([ $t = 5 ] && echo 5 || echo $((t==15?10:20)))
+              xcrun simctl io "$UDID" screenshot "shots/${n}_${t}s.png"
+            done
+            ps -o pid,stat,%cpu,etime,command -p "$PID" | cut -c1-150
+            sample "$PID" 3 -file "shots/${n}_sample.txt" || true
+          done
+          xcrun simctl spawn "$UDID" log show --last 10m --predicate 'process == "SmartPillow"' --style compact > shots/app.log 2>&1
+          cp ~/Library/Logs/DiagnosticReports/SmartPillow* shots/ 2>/dev/null || true
+          exit 0
+
+      - name: Package screenshots
+        if: always()
+        run: cd shots && zip -q ../screens.zip *
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: shots
+
+      - name: Publish screenshots
+        if: always()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: debug-${{ github.run_number }}
+          name: Debug onboarding ${{ github.run_number }}
+          files: screens.zip
+          prerelease: true
