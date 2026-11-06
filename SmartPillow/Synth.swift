@@ -266,9 +266,9 @@ final class Synth {
         padSmooth = 1 / (3 * sampleRate)
         attInc = 1 / (0.01 * sampleRate)
         bowlAtt = 1 / (0.03 * sampleRate)
-        cRain = 1 - exp(-2 * Float.pi * 2800 / sampleRate)
+        cRain = 1 - exp(-2 * Float.pi * 1900 / sampleRate)
         cRainLow = 1 - exp(-2 * Float.pi * 220 / sampleRate)
-        cDrop = 1 - exp(-2 * Float.pi * 5000 / sampleRate)
+        cDrop = 1 - exp(-2 * Float.pi * 3500 / sampleRate)
         cPink = 1 - exp(-2 * Float.pi * 3500 / sampleRate)
         waveInc = 1 / (sampleRate * 10)
         seed = UInt32(truncatingIfNeeded: Int(Date().timeIntervalSince1970 * 1000)) | 1
@@ -319,6 +319,7 @@ final class Synth {
         case Scene.ocean.rawValue: return 0.5
         case Scene.bowl.rawValue: return 0.9
         case Scene.pink.rawValue: return 0.3
+        case Scene.rain.rawValue: return 1.35
         default: return 1
         }
     }
