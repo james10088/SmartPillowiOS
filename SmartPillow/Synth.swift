@@ -306,9 +306,29 @@ final class Synth {
             case Scene.morning.rawValue: ambient(&a, &b, morning: true)
             default: break
             }
-            left[i] = max(-1, min(1, a * sceneGain))
-            right?[i] = max(-1, min(1, b * sceneGain))
+            let g = sceneGain * levelOf(scene)
+            left[i] = soften(a * g)
+            right?[i] = soften(b * g)
         }
+    }
+
+    /// 各音景的响度校准：按离线测量结果把平均响度都调到约 -23 dBFS，切换声音时不会忽大忽小。
+    private func levelOf(_ s: Int) -> Float {
+        switch s {
+        case Scene.ambient.rawValue, Scene.morning.rawValue: return 2.0
+        case Scene.ocean.rawValue: return 0.5
+        case Scene.bowl.rawValue: return 0.9
+        case Scene.pink.rawValue: return 0.3
+        default: return 1
+        }
+    }
+
+    /// 柔和限幅：0.6 以下原样输出，以上平滑压到 1 以内，避免硬削波的“啪”声。
+    @inline(__always) private func soften(_ x: Float) -> Float {
+        let m = abs(x)
+        guard m > 0.6 else { return x }
+        let y = 0.6 + 0.4 * tanh((m - 0.6) / 0.4)
+        return x < 0 ? -y : y
     }
 
     private func enter(_ s: Int) {
