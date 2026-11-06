@@ -5,6 +5,7 @@ struct TonightView: View {
     @EnvironmentObject private var client: PillowClient
     @EnvironmentObject private var assist: AssistEngine
     @Binding private var showRecording: Bool
+    @State private var showAlarm = false
 
     init(showRecording: Binding<Bool>) {
         self._showRecording = showRecording
@@ -33,6 +34,15 @@ struct TonightView: View {
             .animation(.easeInOut, value: assist.message)
         }
         .background { NightBackground() }
+        .onAppear {
+            // 截图用：启动参数 -uiScreen alarm 直接打开闹钟设置
+            if UserDefaults.standard.string(forKey: "uiScreen") == "alarm" { showAlarm = true }
+        }
+        .sheet(isPresented: $showAlarm) {
+            AlarmSheet()
+                .environmentObject(client)
+                .environmentObject(assist)
+        }
     }
 
     // MARK: 顶部
@@ -65,12 +75,12 @@ struct TonightView: View {
                     .frame(width: 40, height: 40)
                     .background(Color(red: 167 / 255, green: 139 / 255, blue: 250 / 255).opacity(0.22), in: Circle())
                 VStack(alignment: .leading, spacing: 1) {
-                    Text("助眠音量 · \(assist.preset.name)").font(.system(size: 14, weight: .medium))
-                    Text("\(assist.soundKind.name) · \(client.link == .connected ? "枕头在线" : "等待枕头连接")")
+                    Text("助眠 · \(assist.soundSource.name)").font(.system(size: 14, weight: .medium))
+                    Text("\(assist.preset.name)变轻 · \(client.link == .connected ? "枕头在线" : "等待枕头连接")")
                         .font(.system(size: 12)).foregroundStyle(Theme.secondary)
                 }
                 Spacer()
-                Text(assist.autoStart ? "已开启" : "已关闭")
+                Text(assist.autoStart ? "自动记录" : "手动记录")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(assist.autoStart ? Theme.mint : Theme.secondary)
                     .padding(.horizontal, 10).padding(.vertical, 5)
@@ -83,7 +93,7 @@ struct TonightView: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: 主卡片
+    // MARK: 主卡片：明早闹钟
 
     private var hero: some View {
         HeroCard(padding: 20) {
@@ -91,7 +101,7 @@ struct TonightView: View {
                 BreathingHalo()
                 VStack(spacing: 0) {
                     if let s = assist.session {
-                        Text("已记录").font(.system(size: 13)).foregroundStyle(.white.opacity(0.88))
+                        Text(assist.waking ? "早上好" : "已记录").font(.system(size: 13)).foregroundStyle(.white.opacity(0.88))
                         TimelineView(.periodic(from: .now, by: 1)) { ctx in
                             GhostClock(main: formatDuration(ctx.date.timeIntervalSince(s.start)),
                                        above: formatDuration(ctx.date.timeIntervalSince(s.start) - 60),
@@ -104,28 +114,71 @@ struct TonightView: View {
                         }
                         .buttonStyle(PillButtonStyle())
                         .padding(.top, 18)
-                    } else {
-                        Text("现在").font(.system(size: 13)).foregroundStyle(.white.opacity(0.88))
+                    } else if assist.waking {
+                        Text("早上好").font(.system(size: 13)).foregroundStyle(.white.opacity(0.88))
                         TimelineView(.periodic(from: .now, by: 1)) { ctx in
                             GhostClock(main: hm(ctx.date), above: hm(ctx.date.addingTimeInterval(-60)),
                                        below: hm(ctx.date.addingTimeInterval(60)), size: 84)
                         }
-                        Text(subline).font(.system(size: 13)).foregroundStyle(.white.opacity(0.92)).padding(.top, 12)
-                        Button { assist.startSession(manual: true) } label: {
-                            Label { Text("开始今晚的记录") } icon: { Icon(kind: .moonPlain, size: 18, color: Theme.ink) }
+                        Text(assist.phase.label).font(.system(size: 13)).foregroundStyle(.white.opacity(0.92)).padding(.top, 12)
+                        Button("我醒了") { assist.stopWake() }
+                            .buttonStyle(PillButtonStyle())
+                            .padding(.top, 18)
+                    } else {
+                        Button { showAlarm = true } label: {
+                            VStack(spacing: 0) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: assist.alarm.enabled ? "alarm.fill" : "alarm")
+                                        .font(.system(size: 12))
+                                    Text(assist.alarm.enabled ? "明早闹钟" : "闹钟未开启")
+                                }
+                                .font(.system(size: 13)).foregroundStyle(.white.opacity(0.88))
+                                GhostClock(main: assist.alarm.timeText,
+                                           above: assist.alarm.text(minutesBefore: 5),
+                                           below: assist.alarm.text(minutesBefore: -5), size: 84)
+                                    .opacity(assist.alarm.enabled ? 1 : 0.55)
+                                Text(alarmLine).font(.system(size: 13)).foregroundStyle(.white.opacity(0.92))
+                                    .multilineTextAlignment(.center)
+                                    .padding(.top, 12)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(PillButtonStyle())
-                        .padding(.top, 18)
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(assist.alarm.enabled ? "明早闹钟 \(assist.alarm.timeText)，点按修改" : "设置起床闹钟")
+
+                        if assist.isLearning {
+                            Button { assist.startSession(manual: true) } label: {
+                                Label { Text("开始今晚的记录") } icon: { Icon(kind: .moonPlain, size: 18, color: Theme.ink) }
+                            }
+                            .buttonStyle(PillButtonStyle())
+                            .padding(.top, 18)
+                            Text("学习期 第 \(assist.sessions.count + 1)/\(AssistEngine.learningNights) 晚 · 睡前点一下，帮枕头熟悉你")
+                                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.8))
+                                .padding(.top, 10)
+                        } else {
+                            Text(autoLine).font(.system(size: 12)).foregroundStyle(.white.opacity(0.8))
+                                .padding(.top, 14)
+                            Button("现在开始记录") { assist.startSession(manual: true) }
+                                .buttonStyle(GhostButtonStyle(height: 42))
+                                .padding(.top, 8)
+                        }
                     }
                 }
             }
         }
     }
 
-    private var subline: String {
-        if let t = assist.usualBedtime { return "平时 \(t) 左右入睡" }
-        if !assist.autoStart { return "自动开始已关闭" }
-        return assist.standby ? "待命中 · 锁屏后躺下也会自动开始" : "躺下后会自动开始助眠"
+    private var alarmLine: String {
+        let a = assist.alarm
+        guard a.enabled else { return "点这里设置起床时间" }
+        if a.windowMinutes == 0 { return "到点前 \(a.rampMinutes) 分钟，音乐慢慢变大" }
+        return "\(a.text(minutesBefore: a.windowMinutes))–\(a.timeText) 浅睡时轻轻叫醒"
+    }
+
+    private var autoLine: String {
+        guard assist.autoStart else { return "自动记录已关闭，需要时点下面开始" }
+        return assist.standby ? "今晚躺下就会自动记录，不用点 · 待命中" : "今晚躺下就会自动记录，不用点"
     }
 
     private func hm(_ d: Date) -> String {

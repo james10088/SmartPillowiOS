@@ -70,6 +70,8 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: currentPathEmpty)
+        // 几乎透明的系统音量控件：外部 App 渐弱、早上提高音量都靠它
+        .background(alignment: .topLeading) { SystemVolumeHost().frame(width: 2, height: 2) }
         .fullScreenCover(isPresented: $showRecording) {
             RecordingView()
                 .environmentObject(client)

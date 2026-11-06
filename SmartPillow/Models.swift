@@ -180,12 +180,16 @@ enum AssistPreset: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var name: String { ["轻柔", "标准", "明显"][index] }
+    /// 安静多久后开始变轻
     var quietWaitMinutes: Double { [10, 5, 2][index] }
-    var minLevel: Float { [0.30, 0.20, 0.10][index] }
-    var startLevel: Float { [0.50, 0.40, 0.30][index] }
-    var capLevel: Float { [0.50, 0.40, 0.30][index] }
+    /// 用多久慢慢降到最低
+    var fadeMinutes: Double { [30, 20, 12][index] }
+    /// 最低降到起始音量的多少
+    var floorRatio: Float { [0.6, 0.4, 0.25][index] }
+    /// 夜里翻来覆去时，最多调回到起始音量的多少
+    var capRatio: Float { [0.8, 0.7, 0.6][index] }
     var cooldownMinutes: Double { [60, 30, 20][index] }
-    var summary: String { "安静 \(Int(quietWaitMinutes)) 分钟后开始变轻，最低 \(Int(minLevel * 100))%" }
+    var summary: String { "安静 \(Int(quietWaitMinutes)) 分钟后，用 \(Int(fadeMinutes)) 分钟慢慢变轻" }
 
     private var index: Int { AssistPreset.allCases.firstIndex(of: self)! }
 }

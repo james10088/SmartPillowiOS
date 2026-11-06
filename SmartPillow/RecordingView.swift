@@ -37,7 +37,7 @@ struct RecordingView: View {
                 }
                 HStack(spacing: 8) {
                     PulseDot()
-                    Text("记录中 · 可以熄屏").font(.system(size: 13))
+                    Text(assist.waking ? "早上好 · 正在叫醒你" : "记录中 · 可以熄屏").font(.system(size: 13))
                 }
                 .padding(.horizontal, 14).frame(height: 34)
                 .glass(17)
@@ -65,11 +65,25 @@ struct RecordingView: View {
             statusCard.rise(0.2)
             tiles.rise(0.3)
             Spacer(minLength: 10)
-            SlideToEnd { assist.endSession() }.rise(0.4)
+            if assist.waking {
+                Button("我醒了") { assist.stopWake() }
+                    .buttonStyle(PillButtonStyle(height: 58))
+                    .rise(0)
+            } else {
+                SlideToEnd { assist.endSession() }.rise(0.4)
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
         .padding(.bottom, 24)
+    }
+
+    private var volumeLabel: String {
+        switch assist.phase {
+        case .waking: return "唤醒音量"
+        case .fading: return "音量渐弱中"
+        default: return "助眠音量"
+        }
     }
 
     private var startLine: String {
@@ -103,7 +117,7 @@ struct RecordingView: View {
         return HStack(spacing: 10) {
             StatTile(value: ss.map { "\(Int(($0.quietRatio * 100).rounded()))%" } ?? "—", label: "安静")
             StatTile(value: "\(ss?.turns ?? 0)", label: "翻身")
-            StatTile(value: "\(assist.levelPercent)%", label: assist.phase == .fading ? "音量渐弱中" : "助眠音量")
+            StatTile(value: "\(assist.levelPercent)%", label: volumeLabel)
         }
     }
 }

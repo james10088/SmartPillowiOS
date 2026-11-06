@@ -64,7 +64,7 @@ jobs:
           # 冷启动一次再开始拍：慢机器上第一次启动常常还没画出来
           xcrun simctl launch "$UDID" "$APP" -uiScreen tonight -onboarded YES -demoMode YES
           sleep 25
-          for s in onboarding tonight recording report history assist device setup calibrate; do
+          for s in onboarding tonight alarm recording report history assist device setup calibrate; do
             ONB=YES; [ "$s" = onboarding ] && ONB=NO
             xcrun simctl terminate "$UDID" "$APP"
             xcrun simctl launch "$UDID" "$APP" \
@@ -73,7 +73,7 @@ jobs:
             sleep 10
             xcrun simctl io "$UDID" screenshot "shots/$s.png"
             # 报告和设备页额外再拍一张，用来区分“渲染慢”和“卡死”
-            if [ "$s" = report ] || [ "$s" = device ]; then
+            if [ "$s" = report ] || [ "$s" = assist ]; then
               sleep 15
               xcrun simctl io "$UDID" screenshot "shots/${s}-late.png"
             fi
