@@ -1,0 +1,32 @@
+name: Audio Samples
+
+# 离线渲染每个助眠音景的 40 秒试听样本，检查峰值和削波。
+on:
+  push:
+    branches: [main]
+    paths: ['SmartPillow/Synth.swift', 'tools/**', '.github/workflows/audio-samples.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build renderer
+        run: swiftc -O SmartPillow/Synth.swift tools/main.swift -o render
+      - name: Render samples
+        run: |
+          mkdir -p samples
+          ./render samples | tee levels.txt
+          cp levels.txt samples/
+      - name: Package
+        run: cd samples && zip -q ../samples.zip *
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: audio-${{ github.run_number }}
+          name: Audio samples ${{ github.run_number }}
+          files: samples.zip
+          prerelease: true
