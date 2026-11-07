@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 
 /// 主动助眠闭环：监测 → 判断 → 干预 → 动态调节 → 自动退出 → 夜醒再助眠 → 早上渐强唤醒。
@@ -84,6 +85,10 @@ final class AssistEngine: ObservableObject {
     /// 只有看到过一次“离枕”才允许自动开始，避免手动结束后人还躺着又被自动开启。
     private var armed = false
 
+    /// 演示模式里显示的示例报告（只在内存里，不写进你的真实记录）
+    private var demoIDs = Set<UUID>()
+    private var bag = Set<AnyCancellable>()
+
     // 闹钟
     private var alarmTarget: Date?
     private var alarmTimer: Timer?
@@ -101,13 +106,18 @@ final class AssistEngine: ObservableObject {
         sessions = SessionStore.load()
         imported = SoundLibrary.list()
         // 截图用：启动参数 `-seedDemo YES` 时填入 7 晚示例报告（只在内存里，不保存）
-        if d.bool(forKey: "seedDemo") && sessions.isEmpty { sessions = SleepSession.sampleNights() }
+        if d.bool(forKey: "seedDemo") && sessions.isEmpty { showDemoNights(true) }
         if case .file(let name) = soundSource, SoundLibrary.url(for: name) == nil { soundSource = .scene(.ambient) }
         sound.setSource(soundSource)
         sound.onRemoteStop = { [weak self] in
             Task { @MainActor in self?.remoteStop() }
         }
         client.onStatus = { [weak self] s in self?.tick(s) }
+        // 打开演示模式时，没有真实记录就放 7 晚示例报告；关掉演示就收回
+        client.$demo
+            .removeDuplicates()
+            .sink { [weak self] on in self?.showDemoNights(on) }
+            .store(in: &bag)
         rescheduleAlarm(startStandby: false)
         if !screenshotMode {
             let t = Timer(timeInterval: 15, repeats: true) { [weak self] _ in
@@ -116,6 +126,23 @@ final class AssistEngine: ObservableObject {
             RunLoop.main.add(t, forMode: .common)
             alarmTimer = t
         }
+    }
+
+    private func showDemoNights(_ on: Bool) {
+        if on {
+            guard sessions.isEmpty else { return }
+            let samples = SleepSession.sampleNights()
+            demoIDs = Set(samples.map(\.id))
+            sessions = samples
+        } else if !demoIDs.isEmpty {
+            sessions.removeAll { demoIDs.contains($0.id) }
+            demoIDs = []
+        }
+    }
+
+    /// 保存记录时去掉示例报告
+    private func persistSessions() {
+        SessionStore.save(sessions.filter { !demoIDs.contains($0.id) })
     }
 
     private func save() {
@@ -239,7 +266,7 @@ final class AssistEngine: ObservableObject {
         let saved = s.duration > 120
         if saved {
             sessions.insert(s, at: 0)
-            SessionStore.save(sessions)
+            persistSessions()
         }
         if case .external = sound.source { sound.restoreExternalVolume() }
         session = nil
@@ -253,7 +280,7 @@ final class AssistEngine: ObservableObject {
 
     func deleteSession(_ id: UUID) {
         sessions.removeAll { $0.id == id }
-        SessionStore.save(sessions)
+        persistSessions()
     }
 
     // MARK: 试听
