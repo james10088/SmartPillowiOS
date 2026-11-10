@@ -100,6 +100,9 @@ struct RootView: View {
             }
             openScreenFromLaunchArgument()
         }
+        // 演示模式：没有真实记录时放 7 晚示例报告（AssistEngine 里也订阅了，这里再保险一次）
+        .onAppear { assist.showDemoNights(client.demo) }
+        .onChange(of: client.demo) { on in assist.showDemoNights(on) }
         .onChange(of: assist.session?.id) { id in
             // 开始记录（手动或自动）就进入“记录中”全屏页，结束后退出。
             // 欢迎页还在时不弹：两个全屏页同时出现会让界面黑屏。
@@ -109,6 +112,10 @@ struct RootView: View {
 
     /// 截图用：启动参数 `-uiScreen 页面名` 直接打开某一页（模拟器自动截图流程会用到）。
     private func openScreenFromLaunchArgument() {
+        // 测试用：启动参数 -flipDemoLater YES 在启动 2 秒后打开演示模式，模拟在设备页手动打开开关
+        if UserDefaults.standard.bool(forKey: "flipDemoLater") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { client.demo = true }
+        }
         guard let screen = UserDefaults.standard.string(forKey: "uiScreen") else { return }
         switch screen {
         case "recording": assist.startSession(manual: true)

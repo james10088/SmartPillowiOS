@@ -128,7 +128,8 @@ final class AssistEngine: ObservableObject {
         }
     }
 
-    private func showDemoNights(_ on: Bool) {
+    /// 演示模式开关变化时调用（重复调用无副作用）。
+    func showDemoNights(_ on: Bool) {
         if on {
             guard sessions.isEmpty else { return }
             let samples = SleepSession.sampleNights()

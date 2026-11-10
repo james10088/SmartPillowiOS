@@ -225,6 +225,8 @@ struct DeviceView: View {
             if let model = client.status?.modelId {
                 Text("睡姿模型 \(model)").font(.system(size: 11)).foregroundStyle(.white.opacity(0.35))
             }
+            Text("App 版本 build \(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "?")")
+                .font(.system(size: 11)).foregroundStyle(.white.opacity(0.35))
         }
         .padding(.horizontal, 16).padding(.bottom, 12)
     }

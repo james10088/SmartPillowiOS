@@ -78,6 +78,11 @@ jobs:
               xcrun simctl io "$UDID" screenshot "shots/${s}-late.png"
             fi
           done
+          # 模拟用户在设备页手动打开演示模式：启动后 2 秒才打开，没有预置示例报告
+          xcrun simctl terminate "$UDID" "$APP"
+          xcrun simctl launch "$UDID" "$APP" -uiScreen report -onboarded YES -demoMode NO -flipDemoLater YES -AppleLanguages "(zh-Hans)" -AppleLocale zh_CN
+          sleep 20
+          xcrun simctl io "$UDID" screenshot "shots/report-demo-toggle.png"
           xcrun simctl spawn "$UDID" log show --last 15m --predicate 'process == "SmartPillow" AND (messageType == error OR messageType == fault)' --style compact > shots/app.log 2>&1
           ls ~/Library/Logs/DiagnosticReports/ 2>/dev/null | grep -i smartpillow > shots/crashes.txt || true
           cp ~/Library/Logs/DiagnosticReports/SmartPillow* shots/ 2>/dev/null || true
